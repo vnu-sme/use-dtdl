@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?use version="2.4.0"?>
+<plugin name="use-dtdl" version="0.1" publisher="Hoang Minh Phuc">
+    <actions>
+        <action
+                label="use-dtdl"
+                icon=""
+                class="org.tzi.use.dtdl.actions.OpenExamplePlugin"
+                tooltip="Show example dialog"
+                menu="Example Plugin"
+                menuitem="Run Example Action"
+                toolbaritem="Example Action"
+                id="org.tzi.use.dtdl.actions.OpenExamplePlugin">
+        </action>
+        <action
+                label="DTDL Diagram"
+                class="org.tzi.use.dtdl.actions.OpenDTDLDiagramAction"
+                menu="Example Plugin"
+                menuitem="DTDL Diagram"
+                toolbaritem="DTDL Diagram"
+                tooltip="Create DTDL diagram view"
+                id="org.tzi.use.dtdl.actions.OpenDTDLDiagramAction">
+        </action>
+        <action
+                label="Create DTDL Instance"
+                class="org.tzi.use.dtdl.actions.CreateInstanceAction"
+                menu="Example Plugin"
+                menuitem="Create Instance"
+                toolbaritem="Create Instance"
+                tooltip="Create DTDL runtime instance for a registered Interface"
+                id="org.tzi.use.dtdl.actions.CreateInstanceAction">
+        </action>
+        <action
+                label="Manage telemetry data"
+                class="org.tzi.use.dtdl.actions.ManageTelemetryAction"
+                menu="Example Plugin"
+                menuitem="Manage telemetry data"
+                toolbaritem="Manage telemetry data"
+                tooltip="Manage telemetry data"
+                id="org.tzi.use.dtdl.actions.ManageTelemetryAction">
+        </action>
+    </actions>
+</plugin>

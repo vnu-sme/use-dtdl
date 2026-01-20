@@ -1,0 +1,630 @@
+package org.tzi.use.dtdl.ast;
+
+
+import org.tzi.use.dtdl.ast.schema.*;
+import org.tzi.use.dtdl.ast.schema.ASTSchema;
+import org.tzi.use.dtdl.semantic.DTDLContext;
+import org.tzi.use.dtdl.semantic.SemanticAnalyzer;
+import org.tzi.use.dtdl.semantic.SemanticAnalyzerImpl;
+
+import java.util.*;
+
+import static org.tzi.use.dtdl.ast.schema.SchemaFactory.primitiveSchemaFromName;
+
+public class ASTInterface extends ASTNode {
+    public String displayName;
+    protected List<ASTRelationship> relationships;
+    protected List<ASTProperty> properties;
+    protected List<ASTCommand> commands;
+    protected List<ASTComponent> components;
+    protected List<ASTTelemetry> telemetries;
+    protected List<String> extendsInterfaces;
+    protected List<ASTSchema> schemas;
+    public java.util.Map<String,Object> props = new java.util.LinkedHashMap<>();
+    public java.util.Map<String, ASTSchema> schemaIndex = new java.util.LinkedHashMap<>();
+
+    public ASTInterface() {
+        relationships = new ArrayList<>();
+        properties = new ArrayList<>();
+        commands = new ArrayList<>();
+        components = new ArrayList<>();
+        telemetries = new ArrayList<>();
+        schemas = new ArrayList<>();
+    }
+
+    public void addRelationship(ASTRelationship a) {
+        relationships.add(a);
+    }
+
+    public void addProperty(ASTProperty a) {
+        properties.add(a);
+    }
+
+    public void addCommand(ASTCommand a) {
+        commands.add(a);
+    }
+
+    public void addComponent(ASTComponent a) {
+        components.add(a);
+    }
+
+    public void addTelemetry(ASTTelemetry a) {
+        telemetries.add(a);
+    }
+
+    public void addSchema(ASTSchema a) {
+        schemas.add(a);
+    }
+
+    public List<String> getExtendsList() {
+        Object ext = props.get("extends");
+        if (!(ext instanceof List<?>)) return List.of();
+
+        List<String> result = new ArrayList<>();
+        for (Object o : (List<?>) ext) {
+            if (o instanceof String s) {
+                result.add(s);
+            }
+        }
+        return result;
+    }
+
+    public void printsAll() {
+        System.out.println("ASTInterface");
+        System.out.println("displayName: " + displayName);
+        System.out.println("extendsInterfaces: " + extendsInterfaces);
+        System.out.println("description: " + description);
+        System.out.println("id: " + id);
+
+        System.out.println("===============BEGIN OF INTERFACE SCHEMAS====================:");
+        for (ASTSchema s : schemas) {
+            System.out.println("  " + s);
+            s.prints();
+        }
+
+        System.out.println("===============BEGIN OF RELATIONSHIPS====================:");
+        for (ASTRelationship r : relationships) {
+            System.out.println("  " + r);
+            r.prints();
+        }
+
+        System.out.println("===============BEGIN OF PROPERTIES=====================:");
+        for (ASTProperty p : properties) {
+            System.out.println("  " + p);
+            p.prints();
+        }
+
+        System.out.println("===============BEGIN OF COMMANDS====================:");
+        for (ASTCommand c : commands) {
+            System.out.println("  " + c);
+            c.prints();
+        }
+
+        System.out.println("===============BEGIN OF COMPONENTS====================:");
+        for (ASTComponent c : components) {
+            System.out.println("  " + c);
+            c.prints();
+        }
+
+        System.out.println("===============BEGIN OF TELEMETRIES====================:");
+        for (ASTTelemetry t : telemetries) {
+            System.out.println("  " + t);
+            t.prints();
+        }
+    }
+
+    public void resolveAll() {
+        // 1) Register top-level schemas into schemaIndex (so property/telemetry refs can be resolved)
+        Object rawSchemas = this.props.get("schemas");
+        if (rawSchemas instanceof List<?>) {
+            for (Object s : (List<?>) rawSchemas) {
+                ASTSchema as = null;
+                if (s instanceof ASTSchema) {
+                    as = (ASTSchema) s;
+                } else if (s instanceof java.util.Map<?,?>) {
+                    // Build an ASTSchema skeleton from raw map to store in index (deferred resolution)
+                    Map<?,?> m = (Map<?,?>) s;
+                    Object t = m.get("@type");
+                    if (t instanceof String) {
+                        switch ((String) t) {
+                            case "Enum" -> as = new ASTEnum();
+                            case "Object" -> as = new ASTObject();
+                            case "Map" -> as = new ASTMap();
+                            default -> as = null;
+                        }
+                        if (as != null) {
+                            // copy raw props (resolver will interpret them later)
+                            as.props.putAll((Map<? extends String, ?>) m);
+                        }
+                    }
+                }
+
+                if (as != null) {
+                    Object id = as.props.get("@id");
+                    if (id instanceof String) {
+                        schemaIndex.put((String) id, as);
+                    }
+                    this.addSchema(as);
+                }
+            }
+        }
+
+        // 2) Resolve the interface contents (properties, telemetries, commands, etc.)
+        resolveInterface(this);
+
+        // 3) Resolve the collected/registered schemas (resolve nested fields/values)
+        for (ASTSchema s : new ArrayList<>(schemaIndex.values())) {
+            resolveSchema(s);
+        }
+        // Also resolve any schemas added via addSchema that might not have been in schemaIndex
+        for (ASTSchema s : this.schemas) {
+            if (s != null && (s.props.get("@id") == null || !schemaIndex.containsValue(s))) {
+                resolveSchema(s);
+            }
+        }
+    }
+
+    // resolve either primitive name or DTMI reference registered in schemaIndex
+    ASTSchema resolveSchemaRef(String ref) {
+        if (ref == null) return null;
+
+        // 1. Primitive schema
+        if (SchemaFactory.isPrimitiveName(ref)) {
+            return SchemaFactory.primitiveSchemaFromName(ref);
+        }
+
+        // 2. DTMI schema
+        return schemaIndex.get(ref);
+
+    }
+
+    void resolveInterface(ASTInterface iface) {
+
+        iface.id = (String) iface.props.get("@id");
+        iface.displayName = (String) iface.props.get("displayName");
+        iface.description = (String) iface.props.get("description");
+
+        Object contents = iface.props.get("contents");
+        if (contents instanceof java.util.List<?>) {
+            for (Object o : (java.util.List<?>) contents) {
+                if (o instanceof ASTContent c) {
+                    switch (c.semanticType) {
+                        case "Property"   -> iface.addProperty((ASTProperty)c);
+                        case "Telemetry"  -> iface.addTelemetry((ASTTelemetry)c);
+                        case "Command"    -> iface.addCommand((ASTCommand)c);
+                        case "Relationship" -> iface.addRelationship((ASTRelationship)c);
+                        case "Component"  -> iface.addComponent((ASTComponent)c);
+                        default -> { /* ignore */ }
+                    }
+                }
+            }
+        }
+
+        // Resolve schemas embedded in properties/telemetries/commands/relationships/components
+        iface.properties.forEach(this::resolveProperty);
+        iface.telemetries.forEach(this::resolveTelemetry);
+        iface.commands.forEach(this::resolveCommand);
+        iface.relationships.forEach(this::resolveRelationship);
+        iface.components.forEach(this::resolveComponent);
+    }
+
+
+    void resolveProperty(ASTProperty p) {
+        p.name = (String) p.props.get("name");
+        resolveGeneralInfo(p);
+
+        Object rawSchema = p.props.get("schema");
+        if (rawSchema instanceof String s)
+            p.schema = resolveSchemaRef(s);
+        else if (rawSchema instanceof ASTSchema as) {
+            p.schema = as;
+            resolveSchema(as);
+        } else if (rawSchema instanceof java.util.Map) {
+            // inline map describing a schema (should have been parsed to ASTSchema, but handle defensively)
+            Map<?,?> m = (Map<?,?>) rawSchema;
+            Object t = m.get("@type");
+            if (t instanceof String) {
+                ASTSchema as2 = switch ((String)t) {
+                    case "Enum" -> new ASTEnum();
+                    case "Object" -> new ASTObject();
+                    case "Map" -> new ASTMap();
+                    default -> null;
+                };
+                if (as2 != null) {
+                    as2.props.putAll((Map<? extends String, ?>) m);
+                    resolveSchema(as2);
+                    p.schema = as2;
+                }
+            }
+        }
+
+        Object w = p.props.get("writable");
+        if (w instanceof Boolean)
+            p.writable = (Boolean) w;
+    }
+
+    void resolveTelemetry(ASTTelemetry t) {
+        t.name = (String) t.props.get("name");
+        resolveGeneralInfo(t);
+
+        Object raw = t.props.get("schema");
+        if (raw instanceof String) {
+            t.schema = resolveSchemaRef((String) raw);
+        } else if (raw instanceof ASTSchema as) {
+            t.schema = as;
+            resolveSchema(as);
+        } else if (raw instanceof java.util.Map) {
+            Map<?,?> m = (Map<?,?>) raw;
+            Object tt = m.get("@type");
+            if (tt instanceof String) {
+                ASTSchema as2 = switch ((String)tt) {
+                    case "Enum" -> new ASTEnum();
+                    case "Object" -> new ASTObject();
+                    case "Map" -> new ASTMap();
+                    default -> null;
+                };
+                if (as2 != null) {
+                    as2.props.putAll((Map<? extends String, ?>) m);
+                    resolveSchema(as2);
+                    t.schema = as2;
+                }
+            }
+        }
+    }
+
+    void resolveCommand(ASTCommand c) {
+        c.name = (String) c.props.get("name");
+        resolveGeneralInfo(c);
+
+        Object req = c.props.get("request");
+        if (req instanceof ASTContent rc)
+            c.request = resolveCommandPayload(rc);
+        else if (req instanceof java.util.Map<?,?> m) {
+            ASTContent rc2 = new ASTContent(){};
+            rc2.props.putAll((Map<? extends String, ?>) m);
+            if (m.get("name") instanceof String) rc2.name = (String) m.get("name");
+            c.request = resolveCommandPayload(rc2);
+        }
+
+        Object res = c.props.get("response");
+        if (res instanceof ASTContent rc2)
+            c.response = resolveCommandPayload(rc2);
+        else if (res instanceof java.util.Map<?,?> m2) {
+            ASTContent rc3 = new ASTContent(){};
+            rc3.props.putAll((Map<? extends String, ?>) m2);
+            if (m2.get("name") instanceof String) rc3.name = (String) m2.get("name");
+            c.response = resolveCommandPayload(rc3);
+        }
+    }
+
+    ASTCommandPayload resolveCommandPayload(ASTContent raw) {
+        ASTCommandPayload p = new ASTCommandPayload();
+        p.name = raw.name;
+        resolveGeneralInfo(raw);
+        p.id = raw.id;
+        p.description = raw.description;
+        p.displayName = raw.displayName;
+        p.type = raw.type;
+        p.comment = raw.comment;
+
+        Object s = raw.props.get("schema");
+        if (s instanceof String) {
+            p.schema = resolveSchemaRef((String)s);
+        } else if (s instanceof ASTSchema as) {
+            p.schema = as;
+            resolveSchema(as);
+        } else if (s instanceof java.util.Map<?,?> m) {
+            Object tt = m.get("@type");
+            if (tt instanceof String) {
+                ASTSchema as2 = switch ((String)tt) {
+                    case "Enum" -> new ASTEnum();
+                    case "Object" -> new ASTObject();
+                    case "Map" -> new ASTMap();
+                    default -> null;
+                };
+                if (as2 != null) {
+                    as2.props.putAll((Map<? extends String, ?>) m);
+                    resolveSchema(as2);
+                    p.schema = as2;
+                }
+            }
+        }
+
+        Object nullable = raw.props.get("nullable");
+        if (nullable instanceof Boolean) p.nullable = (Boolean) nullable;
+
+        return p;
+    }
+
+    void resolveRelationship(ASTRelationship r) {
+        r.name = (String) r.props.get("name");
+        resolveGeneralInfo(r);
+        r.targetInterface = (String) r.props.get("target");
+        Object min = r.props.get("minMultiplicity");
+        Object max = r.props.get("maxMultiplicity");
+        if (min instanceof String) {
+            try { r.minMultiplicity = Integer.parseInt((String)min); } catch(Exception ignore){}
+        } else if (min instanceof Number) r.minMultiplicity = ((Number)min).intValue();
+        if (max instanceof String) {
+            try { r.maxMultiplicity = Integer.parseInt((String)max); } catch(Exception ignore){}
+        } else if (max instanceof Number) r.maxMultiplicity = ((Number)max).intValue();
+
+        Object wr = r.props.get("writable");
+        if (wr instanceof Boolean) r.writable = (Boolean) wr;
+
+        Object propsRaw = r.props.get("properties");
+        if (propsRaw instanceof List<?>) {
+            for (Object o : (List<?>) propsRaw) {
+                if (o instanceof ASTProperty ap) {
+                    resolveProperty(ap);
+                    r.properties.add(ap);
+                } else if (o instanceof java.util.Map<?,?> m) {
+                    ASTProperty ap2 = new ASTProperty();
+                    Object nm = m.get("name");
+                    if (nm instanceof String) ap2.name = (String) nm;
+                    ap2.props.putAll((Map<? extends String, ?>) m);
+                    resolveProperty(ap2);
+                    r.properties.add(ap2);
+                }
+            }
+        }
+    }
+
+    void resolveComponent(ASTComponent c) {
+        c.name = (String) c.props.get("name");
+        resolveGeneralInfo(c);
+        Object raw = c.props.get("schema");
+        if (raw instanceof String) c.schemaInterface = (String) raw;
+        else if (raw instanceof ASTSchema) {
+            // components typically reference other interfaces by DTMI string; handle defensively
+            c.schemaInterface = raw.toString();
+        } else if (raw instanceof java.util.Map<?,?> m) {
+            Object dtmi = m.get("dtmi");
+            if (dtmi instanceof String) c.schemaInterface = (String) dtmi;
+            else if (m.get("@id") instanceof String) c.schemaInterface = (String) m.get("@id");
+        }
+    }
+
+    void resolveSchema(ASTSchema s) {
+        if (s == null) return;
+
+        resolveGeneralInfo(s);
+
+        if (s instanceof ASTEnum e) {
+            Object vs = e.props.get("valueSchema");
+            if (vs instanceof String) {
+                try {
+                    e.valueSchema = (ASTPrimitiveSchema) resolveSchemaRef((String)vs);
+                } catch (Exception ex) { /* ignore */ }
+            } else if (vs instanceof ASTSchema as) {
+                if (as instanceof ASTPrimitiveSchema) e.valueSchema = (ASTPrimitiveSchema) as;
+            }
+
+            Object evs = e.props.get("enumValues");
+            List<ASTEnumValue> out = new ArrayList<>();
+            if (evs instanceof List<?>) {
+                for (Object item : (List<?>) evs) {
+                    if (item instanceof ASTEnumValue ev) {
+                        out.add(ev);
+                    } else if (item instanceof java.util.Map<?,?> m) {
+                        ASTEnumValue nev = new ASTEnumValue();
+                        Object name = m.get("name");
+                        if (name instanceof String) nev.name = (String) name;
+                        Object val = m.get("enumValue");
+                        if (val == null) val = m.get("value");
+                        if (val instanceof String) nev.value = new ASTEnumLiteral((String)val);
+                        else if (val instanceof Number) nev.value = new ASTEnumLiteral(((Number)val).intValue());
+                        out.add(nev);
+                    }
+                }
+            }
+            e.enumValues = out;
+        }
+        else if (s instanceof ASTObject o) {
+            List<ASTField> out = new ArrayList<>();
+            Object rawFields = o.props.get("fields");
+            if (rawFields instanceof List<?>) {
+                for (Object item : (List<?>) rawFields) {
+                    if (item instanceof ASTField af) {
+                        if (af.schema != null) resolveSchema(af.schema);
+                        out.add(af);
+                    } else if (item instanceof java.util.Map<?,?> m) {
+                        ASTField nf = new ASTField();
+                        Object nm = m.get("name");
+                        if (nm instanceof String) nf.name = (String) nm;
+                        Object schemar = m.get("schema");
+                        if (schemar instanceof String) nf.schema = resolveSchemaRef((String)schemar);
+                        else if (schemar instanceof ASTSchema as) {
+                            nf.schema = as;
+                            resolveSchema(as);
+                        } else if (schemar instanceof java.util.Map<?,?> mm) {
+                            Object tt = mm.get("@type");
+                            if (tt instanceof String) {
+                                ASTSchema as2 = switch ((String)tt) {
+                                    case "Enum" -> new ASTEnum();
+                                    case "Object" -> new ASTObject();
+                                    case "Map" -> new ASTMap();
+                                    default -> null;
+                                };
+                                if (as2 != null) {
+                                    as2.props.putAll((Map<? extends String, ?>) mm);
+                                    resolveSchema(as2);
+                                    nf.schema = as2;
+                                }
+                            }
+                        }
+                        out.add(nf);
+                    }
+                }
+            }
+            o.fields = out;
+        }
+        else if (s instanceof ASTMap m) {
+            Object rawKey = s.props.get("mapKey");
+            Object rawValue = s.props.get("mapValue");
+
+            if (rawKey instanceof ASTMapKey mk) {
+                // maybe already constructed
+            } else if (rawKey instanceof java.util.Map<?,?> mm) {
+                ASTMapKey mk = new ASTMapKey();
+                Object nm = mm.get("name");
+                if (nm instanceof String) mk.name = (String) nm;
+                Object sk = mm.get("schema");
+                if (sk instanceof String) mk.schema = resolveSchemaRef((String) sk);
+                else if (sk instanceof ASTSchema) {
+                    // store string representation if needed
+                    mk.schema = (ASTSchema) sk;
+                    resolveSchema(mk.schema);
+                }
+                m.mapKey = mk;
+            }
+
+            if (rawValue instanceof ASTMapValue mv) {
+                // already constructed
+            } else if (rawValue instanceof java.util.Map<?,?> mmv) {
+                ASTMapValue mv = new ASTMapValue();
+                Object nm = mmv.get("name");
+                if (nm instanceof String) mv.name = (String) nm;
+                Object sv = mmv.get("schema");
+                if (sv instanceof String) mv.schema = resolveSchemaRef((String) sv);
+                else if (sv instanceof ASTSchema asv) {
+                    mv.schema = asv;
+                    resolveSchema(asv);
+                } else if (sv instanceof java.util.Map<?,?> mm2) {
+                    Object tt = mm2.get("@type");
+                    if (tt instanceof String) {
+                        ASTSchema as2 = switch ((String)tt) {
+                            case "Enum" -> new ASTEnum();
+                            case "Object" -> new ASTObject();
+                            case "Map" -> new ASTMap();
+                            default -> null;
+                        };
+                        if (as2 != null) {
+                            as2.props.putAll((Map<? extends String, ?>) mm2);
+                            resolveSchema(as2);
+                            mv.schema = as2;
+                        }
+                    }
+                }
+                m.mapValue = mv;
+            }
+        }
+        else if (s instanceof ASTArray a) {
+            Object rawEl = s.props.get("elementSchema");
+            if (rawEl instanceof String) {
+                a.elementSchema = resolveSchemaRef((String) rawEl);
+            } else if (rawEl instanceof ASTSchema as) {
+                a.elementSchema = as;
+                resolveSchema(as);
+            } else if (rawEl instanceof java.util.Map<?,?> mm) {
+                Object tt = mm.get("@type");
+                if (tt instanceof String) {
+                    ASTSchema as2 = switch ((String)tt) {
+                        case "Enum" -> new ASTEnum();
+                        case "Object" -> new ASTObject();
+                        case "Map" -> new ASTMap();
+                        default -> null;
+                    };
+                    if (as2 != null) {
+                        as2.props.putAll((Map<? extends String, ?>) mm);
+                        resolveSchema(as2);
+                        a.elementSchema = as2;
+                    }
+                }
+            }
+        }
+    }
+
+    void resolveGeneralInfo(ASTContent n) {
+        n.id = (String) n.props.get("@id");
+        n.type = (String) n.props.get("@type");
+        n.comment = (String) n.props.get("comment");
+        n.description = (String) n.props.get("description");
+        n.displayName = (String) n.props.get("displayName");
+    }
+
+    void resolveGeneralInfo(ASTSchema n) {
+        n.id = (String) n.props.get("@id");
+        n.type = (String) n.props.get("@type");
+        n.comment = (String) n.props.get("comment");
+        n.description = (String) n.props.get("description");
+        n.displayName = (String) n.props.get("displayName");
+    }
+
+    public void validate(SemanticAnalyzer analyzer) {
+        DTDLContext ctx = analyzer.getContext();
+
+        // Basic checks — id/type
+        Object idObj = this.props.get("@id");
+        String id = idObj instanceof String ? (String) idObj : null;
+        if (id == null || id.isBlank()) {
+            ctx.report("Interface missing @id", null);
+            return;
+        }
+        Object typeObj = this.props.get("@type");
+        if (!"Interface".equals(typeObj)) {
+            ctx.report("Interface @type must be \"Interface\"", id);
+        }
+
+        // extends existence + depth + cycle detection
+        Object extObj = this.props.get("extends");
+        List<String> extendsList = new ArrayList<>();
+        if (extObj instanceof List<?>) {
+            for (Object item : (List<?>) extObj) {
+                if (item instanceof String s) extendsList.add(s);
+                else ctx.report("extends entries must be DTMI strings", id);
+            }
+        }
+
+        // existence check
+        for (String ref : extendsList) {
+            if (!ctx.hasInterface(ref)) {
+                ctx.report("Interface extends unknown interface: " + ref, id);
+            }
+        }
+
+        // validate duplicate content names inside of interface
+        validateDuplicateContentNames(ctx, id);
+
+        // ---- validate children (delegates) ----
+        for (ASTProperty p : this.properties) p.validate(analyzer);
+        for (ASTTelemetry t : this.telemetries) t.validate(analyzer);
+        for (ASTCommand c : this.commands) c.validate(analyzer);
+        for (ASTRelationship r : this.relationships) r.validate(analyzer);
+        for (ASTComponent c : this.components) c.validate(analyzer);
+    }
+
+    private void validateDuplicateContentNames(DTDLContext ctx, String id) {
+        validateDuplicates(ctx, id, "Property", this.properties, p -> p.name, p -> p.id);
+        validateDuplicates(ctx, id, "Telemetry", this.telemetries, t -> t.name, t -> t.id);
+        validateDuplicates(ctx, id, "Command", this.commands, c -> c.name, c -> c.id);
+        validateDuplicates(ctx, id, "Relationship", this.relationships, r -> r.name, r -> r.id);
+        validateDuplicates(ctx, id, "Component", this.components, c -> c.name, c -> c.id);
+    }
+
+    private <T> void validateDuplicates(
+            DTDLContext ctx,
+            String interfaceId,
+            String kind,
+            List<T> elements,
+            java.util.function.Function<T, String> nameFn,
+            java.util.function.Function<T, String> idFn
+    ) {
+        if (elements == null) return;
+
+        java.util.Set<String> names = new java.util.HashSet<>();
+
+        for (T e : elements) {
+            if (e == null) continue;
+
+            String name = nameFn.apply(e);
+            String eid = idFn.apply(e);
+
+            if (name == null || name.isBlank()) {
+                ctx.report(kind + " with missing name in interface " + interfaceId, eid);
+            } else if (!names.add(name)) {
+                ctx.report("Duplicate " + kind.toLowerCase() + " name '" + name + "' in interface " + interfaceId, eid);
+            }
+        }
+    }
+}

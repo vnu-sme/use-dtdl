@@ -1,0 +1,141 @@
+{
+  "@context": "dtmi:dtdl:context;4",
+  "@id": "dtmi:com:example:Room;1",
+  "@type": "Interface",
+  "displayName": "Classroom",
+  "description": "Highly detailed smart classroom digital twin with reusable schemas, nested operational state, and environmental intelligence.",
+  "schemas": [
+    {
+      "@id": "dtmi:com:example:schemas:RoomType;1",
+      "@type": "Enum",
+      "valueSchema": "string",
+      "enumValues": [
+        { "name": "lectureHall", "enumValue": "lectureHall" },
+        { "name": "scienceLab", "enumValue": "scienceLab" },
+        { "name": "standardClassroom", "enumValue": "standardClassroom" }
+      ]
+    },
+    {
+      "@type": "Enum",
+      "valueSchema": "string",
+      "enumValues": [
+        { "name": "low", "enumValue": "low" },
+        { "name": "medium", "enumValue": "medium" },
+        { "name": "high", "enumValue": "high" }
+      ]
+    },
+    {
+      "@id": "dtmi:com:example:schemas:EnvironmentState;1",
+      "@type": "Object",
+      "fields": [
+        { "name": "temperature", "schema": "double" },
+        { "name": "humidity", "schema": "double" },
+        { "name": "co2", "schema": "double" },
+        { "name": "noiseLevel", "schema": "double" }
+      ]
+    },
+    {
+      "@id": "dtmi:com:example:schemas:LearningEquipmentState;1",
+      "@type": "Object",
+      "fields": [
+        { "name": "projectorOn", "schema": "boolean" },
+        { "name": "lightingLevel", "schema": "integer" },
+        { "name": "windowOpen", "schema": "boolean" }
+      ]
+    },
+    {
+      "@id": "dtmi:com:example:schemas:SecuritySystemState;1",
+      "@type": "Object",
+      "fields": [
+        { "name": "cameraActive", "schema": "boolean" },
+        { "name": "doorLocked", "schema": "boolean" },
+        {
+          "name": "alarmState",
+          "schema": {
+            "@type": "Enum",
+            "valueSchema": "string",
+            "enumValues": [
+              { "name": "off", "enumValue": "off" },
+              { "name": "armed", "enumValue": "armed" },
+              { "name": "alert", "enumValue": "alert" }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "roomType",
+      "description": "Defines the category of classroom.",
+      "schema": "dtmi:com:example:schemas:RoomType;1"
+    },
+    {
+      "@type": "Property",
+      "name": "capacity",
+      "schema": "integer"
+    },
+    {
+      "@type": "Property",
+      "name": "occupied",
+      "schema": "boolean"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "environmentState",
+      "description": "Aggregated environmental metrics.",
+      "schema": "dtmi:com:example:schemas:EnvironmentState;1"
+    },
+    {
+      "@type": "Property",
+      "name": "learningEquipmentState",
+      "description": "State of core classroom learning equipment.",
+      "schema": "dtmi:com:example:schemas:LearningEquipmentState;1"
+    },
+    {
+      "@type": "Property",
+      "name": "securityState",
+      "description": "Security subsystem logical state.",
+      "schema": "dtmi:com:example:schemas:SecuritySystemState;1"
+    },
+    {
+      "@type": "Command",
+      "name": "setLightingLevel",
+      "request": {
+        "name": "level",
+        "schema": "integer"
+      }
+    },
+    {
+      "@type": "Command",
+      "name": "lockRoom"
+    },
+    {
+      "@type": "Command",
+      "name": "unlockRoom"
+    },
+    {
+      "@type": "Component",
+      "name": "airConditioner",
+      "schema": "dtmi:com:example:AirConditioner;1"
+    },
+    {
+      "@type": "Relationship",
+      "name": "hasFireSprinkler",
+      "target": "dtmi:com:example:FireSprinklerHead;1",
+      "properties": [
+        {
+          "@type": "Property",
+          "name": "lastInspectionDate",
+          "schema": "dateTime"
+        },
+        {
+          "@type": "Property",
+          "name": "coverageRadius",
+          "schema": "double"
+        }
+      ]
+    }
+  ]
+}

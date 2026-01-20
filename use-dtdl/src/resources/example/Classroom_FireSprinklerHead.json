@@ -1,0 +1,41 @@
+{
+  "@context": "dtmi:dtdl:context;4",
+  "@id": "dtmi:com:example:FireSprinklerHead;1",
+  "@type": "Interface",
+  "displayName": "Fire Sprinkler Head",
+  "description": "Fire suppression sprinkler unit installed in classrooms.",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "onOff",
+      "schema": "boolean",
+      "description": "Indicates whether the sprinkler is currently active."
+    },
+    {
+      "@type": "Property",
+      "name": "waterPressure",
+      "schema": "double"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "temperatureTrigger",
+      "schema": "double",
+      "description": "Temperature that activates the sprinkler."
+    },
+    {
+      "@type": "Telemetry",
+      "name": "smokeDetected",
+      "schema": "boolean",
+      "comment": "It detects smoke i guess",
+      "displayName": "smokeDetected"
+    },
+    {
+      "@type": "Command",
+      "name": "manualActivate"
+    },
+    {
+      "@type": "Command",
+      "name": "manualDeactivate"
+    }
+  ]
+}

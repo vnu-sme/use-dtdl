@@ -1,0 +1,802 @@
+package org.tzi.use.dtdl.DTDLModel;
+
+public class ContentElement extends Element {
+    protected String name;
+
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public void prints() {
+        prints(0);
+    }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + this.getClass().getSimpleName() + ":");
+        super.prints(indent + 2);
+        System.out.println(ind + "  name: " + safe(name));
+    }
+}
+package org.tzi.use.dtdl.DTDLModel;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class DTDLModel {
+    private final Map<String, Interface> interfaces = new LinkedHashMap<>();
+
+    public void addInterface(Interface iface) {
+        interfaces.put(iface.getId(), iface);
+    }
+
+    public Interface getInterface(String id) {
+        return interfaces.get(id);
+    }
+
+    public Map<String, Interface> getInterfaces() {
+        return interfaces;
+    }
+
+    public Interface findInterfaceById(String id) {
+        if (id == null) return null;
+        return interfaces.get(id);
+    }
+
+    public void prints() {
+        if (interfaces.isEmpty()) {
+            System.out.println("DTDLModel: (no interfaces)");
+            return;
+        }
+        System.out.println("DTDLModel:");
+        for (Interface iface : interfaces.values()) {
+            System.out.println();
+            iface.prints(2);
+        }
+    }
+}
+package org.tzi.use.dtdl.DTDLModel;
+
+public abstract class Element {
+    protected String id;
+    protected String type;
+    protected String comment;
+    protected String description;
+    protected String displayName;
+
+    public String getId() { return id; }
+    public String getType() { return type; }
+    public String getComment() { return comment; }
+
+    public void setComment(String comment) { this.comment = comment; }
+
+    public String getDescription() {
+        return description;
+    }
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public void prints() {
+        prints(0);
+    }
+
+    public void setGeneralInfo(String id, String type, String comment, String description, String displayName) {
+        this.id = id;
+        this.type = type;
+        this.comment = comment;
+        this.description = description;
+        this.displayName = displayName;
+    }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "id: " + safe(id));
+        System.out.println(ind + "type: " + safe(type));
+        System.out.println(ind + "displayName: " + safe(displayName));
+        System.out.println(ind + "description: " + safe(description));
+        System.out.println(ind + "comment: " + safe(comment));
+    }
+
+    /* helpers */
+    protected static String indent(int n) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) sb.append(' ');
+        return sb.toString();
+    }
+
+    protected static String safe(String s) {
+        return s == null ? "(null)" : s;
+    }
+}
+package org.tzi.use.dtdl.DTDLModel;
+
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+public class Interface extends Element {
+    private String context; // should be IRI
+    private List<ContentElement> contents;
+    private List<Interface> extendsInterfaces;
+    private final Map<String, Schema> schemas = new LinkedHashMap<>();
+
+    public Interface(String id) {
+        this.id = id;
+        this.type = "Interface";
+        this.contents = new ArrayList<>();
+        this.extendsInterfaces = new ArrayList<>();
+    }
+
+    public void setContext(String context) {
+        this.context = context;
+    }
+
+    public String getContext() {
+        return context;
+    }
+
+    public void addExtends(Interface dtmi) {
+        extendsInterfaces.add(dtmi);
+    }
+
+    public List<Interface> getExtends() {
+        return extendsInterfaces;
+    }
+
+    public void addContent(ContentElement e) {
+        contents.add(e);
+    }
+
+    public List<ContentElement> getContents() {
+        return contents;
+    }
+
+    public void addSchema(String id, Schema s) {
+        schemas.put(id, s);
+    }
+
+    public Map<String, Schema> getSchemas() {
+        return schemas;
+    }
+
+    @Override
+    public void prints() { prints(0); }
+
+    @Override
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Interface:");
+        super.prints(indent + 2);
+        System.out.println(ind + "  context: " + safe(context));
+
+        // schemas
+        if (schemas.isEmpty()) {
+            System.out.println(ind + "  Schemas: (none)");
+        } else {
+            System.out.println(ind + "  Schemas:");
+            for (java.util.Map.Entry<String, Schema> e : schemas.entrySet()) {
+                System.out.println(ind + "    id: " + safe(e.getKey()));
+                Schema s = e.getValue();
+                if (s != null) s.prints(indent + 6);
+                else System.out.println(ind + "      (null)");
+            }
+        }
+
+        // contents
+        if (contents.isEmpty()) {
+            System.out.println(ind + "  Contents: (none)");
+        } else {
+            System.out.println(ind + "  Contents:");
+            for (ContentElement c : contents) {
+                if (c != null) c.prints(indent + 4);
+                else System.out.println(ind + "    (null content)");
+            }
+        }
+    }
+}
+package org.tzi.use.dtdl.DTDLModel;
+
+import org.tzi.use.dtdl.DTDLModel.Schema.ComplexSchema;
+
+public class NamedSchema extends ComplexSchema {
+    protected String name;
+
+    public void setName(String n) { this.name = n; }
+    public String getName() { return name; }
+}
+package org.tzi.use.dtdl.DTDLModel.Command;
+
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
+
+public class Command extends ContentElement {
+    private CommandPayload request;
+    private CommandPayload response;
+
+    public Command(String id) { this.id = id; this.type = "Command"; }
+
+    public void setName(String name) { this.name = name; }
+
+    public void setRequest(CommandPayload p) { this.request = p; }
+
+    public void setResponse(CommandPayload p) { this.response = p; }
+
+    public CommandPayload getRequest() { return request; }
+
+    public CommandPayload getResponse() { return response; }
+
+    @Override
+    public void prints() { prints(0); }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Command:");
+        super.prints(indent + 2);
+        System.out.println(ind + "  name: " + safe(name));
+
+        if (request != null) {
+            System.out.println(ind + "  request:");
+            request.prints(indent + 4);
+        } else {
+            System.out.println(ind + "  request: (none)");
+        }
+
+        if (response != null) {
+            System.out.println(ind + "  response:");
+            response.prints(indent + 4);
+        } else {
+            System.out.println(ind + "  response: (none)");
+        }
+    }
+
+
+}
+package org.tzi.use.dtdl.DTDLModel.Command;
+
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+
+public class CommandPayload extends ContentElement {
+    private boolean nullable;
+    private Schema schema;
+
+    public void setName(String name) { this.name = name; }
+
+    public void setNullable(boolean n) { this.nullable = n; }
+
+    public void setSchema(Schema s) { this.schema = s; }
+
+    public boolean isNullable() { return nullable; }
+
+    public Schema getSchema() { return schema; }
+
+    @Override
+    public void prints() { prints(0); }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "CommandPayload:");
+        super.prints(indent + 2);
+        System.out.println(ind + "  name: " + safe(name));
+        System.out.println(ind + "  nullable: " + nullable);
+        System.out.print(ind + "  schema: ");
+        if (schema != null) {
+            System.out.println();
+            schema.prints(indent + 4);
+        } else {
+            System.out.println("(null)");
+        }
+    }
+}
+
+package org.tzi.use.dtdl.DTDLModel.Component;
+
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
+import org.tzi.use.dtdl.DTDLModel.Interface;
+
+public class Component extends ContentElement {
+    private Interface schemaInterface;
+
+    public Component(String id) { this.id = id; this.type = "Component"; }
+
+    public void setName(String name) { this.name = name; }
+
+    public void setSchemaInterface(Interface dtmi) { this.schemaInterface = dtmi; }
+
+    public Interface getSchemaInterface() { return schemaInterface; }
+
+    @Override
+    public void prints() { prints(0); }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Component:");
+        super.prints(indent + 2);
+        System.out.println(ind + "  name: " + safe(name));
+        System.out.println(ind + "  schemaInterface: " + (schemaInterface != null ? schemaInterface.getId() : "(null)"));
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.DataTypes;
+
+public class DTMI {
+    private final String value;
+
+    public DTMI(String value) {
+        this.value = value;
+    }
+
+    public String getValue() {
+        return value;
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.DataTypes;
+
+public class IRI {
+    private final String value;
+
+    public IRI(String value) {
+        this.value = value;
+    }
+
+    public String getValue() {
+        return value;
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Property;
+
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+
+public class Property extends ContentElement {
+    private Schema schema;
+    private boolean writable;
+
+    public Property(String id) {
+        this.id = id;
+        this.type = "Property";
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setSchema(Schema s) {
+        this.schema = s;
+    }
+
+    public Schema getSchema() {
+        return schema;
+    }
+
+    public void setWritable(boolean w) {
+        this.writable = w;
+    }
+
+    public boolean isWritable() {
+        return writable;
+    }
+
+    @Override
+    public void prints() { prints(0); }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Property:");
+        super.prints(indent + 2);
+        System.out.println(ind + "  name: " + safe(name));
+        System.out.println(ind + "  writable: " + writable);
+        System.out.print(ind + "  schema: ");
+        if (schema != null) {
+            System.out.println();
+            schema.prints(indent + 4);
+        } else {
+            System.out.println("(null)");
+        }
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Relationship;
+
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
+import org.tzi.use.dtdl.DTDLModel.Property.Property;
+import org.tzi.use.dtdl.DTDLModel.Interface;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Relationship extends ContentElement {
+    // now holds an actual Interface reference (or null)
+    private Interface target;
+    private Integer minMultiplicity;
+    private Integer maxMultiplicity;
+    private boolean writable;
+    private final List<Property> properties = new ArrayList<>();
+
+    public Relationship(String id) { this.id = id; this.type = "Relationship"; }
+
+    public void setName(String name) { this.name = name; }
+
+    /** Set target interface (object reference). Null allowed if unresolved. */
+    public void setTarget(Interface target) { this.target = target; }
+
+    /** Return target interface object, or null if not set / unresolved. */
+    public Interface getTarget() { return target; }
+
+    public void setMinMultiplicity(Integer m) { this.minMultiplicity = m; }
+
+    public void setMaxMultiplicity(Integer m) { this.maxMultiplicity = m; }
+
+    public void setWritable(boolean w) { this.writable = w; }
+
+    public void addProperty(Property p) { properties.add(p); }
+
+    public List<Property> getProperties() { return properties; }
+
+    @Override
+    public void prints() { prints(0); }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Relationship:");
+        super.prints(indent + 2);
+        System.out.println(ind + "  name: " + safe(name));
+        System.out.println(ind + "  target: " + (target != null ? safe(target.getId()) : "(null)"));
+        System.out.println(ind + "  minMultiplicity: " + (minMultiplicity == null ? "(null)" : minMultiplicity));
+        System.out.println(ind + "  maxMultiplicity: " + (maxMultiplicity == null ? "(null)" : maxMultiplicity));
+        System.out.println(ind + "  writable: " + writable);
+
+        if (!properties.isEmpty()) {
+            System.out.println(ind + "  properties:");
+            for (Property p : properties) {
+                p.prints(indent + 4);
+            }
+        }
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Schema;
+
+import org.tzi.use.dtdl.DTDLModel.Element;
+
+public abstract class ComplexSchema extends Schema {
+}
+package org.tzi.use.dtdl.DTDLModel.Schema;
+
+// DEPRECATED
+public class PrimitiveSchema {
+    // Could be enum, string type, etc.
+    private final Object value;
+
+    public PrimitiveSchema(String v)  { value = v; }
+    public PrimitiveSchema(boolean v)  { value = v; }
+    public PrimitiveSchema(byte v)     { value = v; }
+    public PrimitiveSchema(short v)    { value = v; }
+    public PrimitiveSchema(int v)      { value = v; }
+    public PrimitiveSchema(long v)     { value = v; }
+    public PrimitiveSchema(float v)    { value = v; }
+    public PrimitiveSchema(double v)   { value = v; }
+    public PrimitiveSchema(char v)     { value = v; }
+
+    public Object value() {
+        return value;
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Schema;
+
+public class PrimitiveType extends Schema {
+    private final String typeName;
+    public PrimitiveType(String typeName) { this.typeName = typeName; }
+    public String getTypeName() { return typeName; }
+
+    @Override
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "PrimitiveType: " + safe(typeName));
+    }
+
+}
+package org.tzi.use.dtdl.DTDLModel.Schema;
+
+import org.tzi.use.dtdl.DTDLModel.Element;
+
+public abstract class Schema extends Element {
+    // intentionally empty (root type)
+
+    // in Schema base
+    public void prints() { prints(0); }
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Schema: (unknown subtype: " + getClass().getSimpleName() + ")");
+    }
+}
+
+package org.tzi.use.dtdl.DTDLModel.Schema.Array;
+
+import org.tzi.use.dtdl.DTDLModel.Schema.ComplexSchema;
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+
+public class Array extends ComplexSchema {
+    private Schema elementSchema;
+
+    public void setElementSchema(Schema s) { this.elementSchema = s; }
+    public Schema getElementSchema() { return this.elementSchema; }
+
+    @Override
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Array:");
+        if (getElementSchema() == null) {
+            System.out.println(ind + "  elementSchema: (null)");
+        } else {
+            System.out.println(ind + "  elementSchema:");
+            getElementSchema().prints(indent + 4);
+        }
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Schema.Enum;
+
+import org.tzi.use.dtdl.DTDLModel.Schema.ComplexSchema;
+import org.tzi.use.dtdl.DTDLModel.Schema.PrimitiveType;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Enum extends ComplexSchema {
+    private PrimitiveType valueSchema;
+    private final List<EnumValue> values = new ArrayList<>();
+
+    public void setValueSchema(PrimitiveType s) { this.valueSchema = s; }
+
+    public PrimitiveType getValueSchema() { return valueSchema; }
+
+    public void addEnumValue(EnumValue v) { values.add(v); }
+
+    public List<EnumValue> getValues() { return values; }
+
+    @Override
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Enum:");
+        if (getValueSchema() != null) {
+            System.out.println(ind + "  valueSchema: " + valueSchema.getTypeName());
+        } else {
+            System.out.println(ind + "  valueSchema: (unset)");
+        }
+        if (getValues().isEmpty()) {
+            System.out.println(ind + "  values: (none)");
+        } else {
+            System.out.println(ind + "  values:");
+            for (EnumValue ev : getValues()) ev.prints(indent + 4);
+        }
+    }
+}
+
+
+package org.tzi.use.dtdl.DTDLModel.Schema.Enum;
+
+public class EnumLiteral {
+    private final Integer intValue;
+    private final String stringValue;
+
+    public EnumLiteral(int value) {
+        this.intValue = value;
+        this.stringValue = null;
+    }
+
+    public EnumLiteral(String value) {
+        this.stringValue = value;
+        this.intValue = null;
+    }
+
+    public boolean isInt() {
+        return intValue != null;
+    }
+
+    public boolean isString() {
+        return stringValue != null;
+    }
+
+    public Object raw() {
+        return isInt() ? intValue : stringValue;
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Schema.Enum;
+
+import org.tzi.use.dtdl.DTDLModel.NamedSchema;
+
+public class EnumValue extends NamedSchema {
+    private EnumLiteral value;
+
+    public void setValue(EnumLiteral v) { this.value = v; }
+    public EnumLiteral getValue() { return value; }
+
+    @Override
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "EnumValue: " + safe(name));
+        if (value != null) {
+            System.out.println(ind + "  literal: " + String.valueOf(value.raw()));
+        } else {
+            System.out.println(ind + "  literal: (null)");
+        }
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Schema.Map;
+
+import org.tzi.use.dtdl.DTDLModel.Schema.ComplexSchema;
+
+public class Map extends ComplexSchema {
+    private MapKey mapKey;
+    private MapValue mapValue;
+
+    public void setMapKey(MapKey k) { this.mapKey = k; }
+    public void setMapValue(MapValue v) { this.mapValue = v; }
+    public MapKey getMapKey() { return mapKey; }
+    public MapValue getMapValue() { return mapValue; }
+
+    // Map
+    @Override
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Map:");
+        if (getMapKey() != null) {
+            System.out.println(ind + "  mapKey: " + safe(getMapKey().getName()));
+            getMapKey().prints(indent + 4);
+        } else {
+            System.out.println(ind + "  mapKey: (null)");
+        }
+        if (getMapValue() != null) {
+            System.out.println(ind + "  mapValue:");
+            getMapValue().prints(indent + 4);
+        } else {
+            System.out.println(ind + "  mapValue: (null)");
+        }
+    }
+}
+
+package org.tzi.use.dtdl.DTDLModel.Schema.Map;
+
+import org.tzi.use.dtdl.DTDLModel.NamedSchema;
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+
+public class MapKey extends NamedSchema {
+    private Schema schema; // may be primitive or complex
+
+    public MapKey(String name, Schema schema) { this.name = name; this.schema = schema; }
+
+    public String getName() { return name; }
+
+    public Schema getSchema() { return schema; }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + this.getClass().getSimpleName() + ": " + safe(name));
+        {
+            Schema s = (this).getSchema();
+            if (s != null) {
+                s.prints(indent + 2);
+            }
+        }
+    }
+}
+
+package org.tzi.use.dtdl.DTDLModel.Schema.Map;
+
+import org.tzi.use.dtdl.DTDLModel.NamedSchema;
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+
+public class MapValue extends NamedSchema {
+    private Schema schema;
+
+    public MapValue(Schema schema) { this.schema = schema; }
+
+    public Schema getSchema() { return schema; }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + this.getClass().getSimpleName() + ": " + safe(name));
+        {
+            Schema s = (this).getSchema();
+            if (s != null) {
+                s.prints(indent + 2);
+            }
+        }
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Schema.Object;
+
+import org.tzi.use.dtdl.DTDLModel.NamedSchema;
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+
+public class Field extends NamedSchema {
+    private Schema schema;
+
+    public Field(String name, Schema schema) { this.name = name; this.schema = schema; }
+
+    public String getName() { return name; }
+
+    public Schema getSchema() { return schema; }
+
+    // Field
+    @Override
+    public void prints() { prints(0); }
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Field: " + safe(name));
+        if (schema == null) {
+            System.out.println(ind + "  schema: (null)");
+        } else {
+            System.out.println(ind + "  schema:");
+            schema.prints(indent + 4);
+        }
+    }
+
+}
+package org.tzi.use.dtdl.DTDLModel.Schema.Object;
+
+import org.tzi.use.dtdl.DTDLModel.Schema.ComplexSchema;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Object extends ComplexSchema {
+    private final List<Field> fields = new ArrayList<>();
+
+    public void addField(Field f) { fields.add(f); }
+
+    public List<Field> getFields() { return fields; }
+
+    // Object
+    @Override
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Object:");
+        if (fields.isEmpty()) {
+            System.out.println(ind + "  fields: (none)");
+        } else {
+            System.out.println(ind + "  fields:");
+            for (Field f : fields) {
+                f.prints(indent + 4);
+            }
+        }
+    }
+}
+package org.tzi.use.dtdl.DTDLModel.Telemetry;
+
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+
+public class Telemetry extends ContentElement {
+    private Schema schema;
+
+    public Telemetry(String id) { this.id = id; this.type = "Telemetry"; }
+
+    public void setName(String name) { this.name = name; }
+    public void setSchema(Schema s) { this.schema = s; }
+    public Schema getSchema() { return schema; }
+
+    @Override
+    public void prints() { prints(0); }
+
+    public void prints(int indent) {
+        String ind = indent(indent);
+        System.out.println(ind + "Telemetry:");
+        super.prints(indent + 2);
+        System.out.println(ind + "  name: " + safe(name));
+        System.out.print(ind + "  schema: ");
+        if (schema != null) {
+            System.out.println();
+            schema.prints(indent + 4);
+        } else {
+            System.out.println("(null)");
+        }
+    }
+}
