@@ -24,6 +24,9 @@ public final class DTDLModelRegistry {
     // track contributions: source model -> set of interface IDs it added
     private final Map<DTDLModel, Set<String>> contributions = Collections.synchronizedMap(new LinkedHashMap<>());
 
+    // persistent mapping DTMI -> class name in the Use model
+    private final ConcurrentHashMap<String, String> dtmiToClassName = new ConcurrentHashMap<>();
+
     public static final class RegistrationResult {
         public final boolean success;
         public final List<String> conflicts; // list of conflicting interface ids
@@ -194,5 +197,21 @@ public final class DTDLModelRegistry {
      */
     public DTDLModel getCanonicalModel() {
         return canonical;
+    }
+
+    public void registerClassMapping(String dtmi, String className) {
+        if (dtmi == null || className == null) return;
+        dtmiToClassName.put(dtmi, className);
+    }
+
+    public Optional<String> getClassNameForDtmi(String dtmi) {
+        if (dtmi == null) return Optional.empty();
+        String v = dtmiToClassName.get(dtmi);
+        return v == null ? Optional.empty() : Optional.of(v);
+    }
+
+    public boolean hasClassForDtmi(String dtmi) {
+        if (dtmi == null) return false;
+        return dtmiToClassName.containsKey(dtmi);
     }
 }

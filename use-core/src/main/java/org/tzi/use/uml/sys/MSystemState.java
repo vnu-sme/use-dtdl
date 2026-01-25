@@ -2092,4 +2092,22 @@ public final class MSystemState {
 		}
 		out.println(String.format("The evaluation of the state invariants of %,d state machines took %,dms.", checkedStateMachines, duration));
 	}
+
+    /**
+     * Ensure link sets exist for all associations currently in the model.
+     * Being called after the model has been changed (associations added/removed).
+     */
+    public void ensureLinkSetsForModel() {
+        synchronized (dirtyLock) {
+            // add missing link sets for associations newly added to the model
+            for (MAssociation assoc : fSystem.model().associations()) {
+                if (!fLinkSets.containsKey(assoc)) {
+                    MLinkSet linkSet = new MLinkSet(assoc);
+                    fLinkSets.put(assoc, linkSet);
+                }
+            }
+            // intentionally do not remove linksets for associations that
+            // were removed from the model to avoid accidental loss of link data.
+        }
+    }
 }

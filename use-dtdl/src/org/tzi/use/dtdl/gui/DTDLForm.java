@@ -1,7 +1,9 @@
 package org.tzi.use.dtdl.gui;
 
+import org.tzi.use.api.UseModelApi;
 import org.tzi.use.dtdl.DTDLModel.DTDLModel;
 import org.tzi.use.dtdl.ast.ASTInterface;
+import org.tzi.use.dtdl.mapping.DTDLToMModelMapper;
 import org.tzi.use.dtdl.parser.DTDLCompiler;
 import org.tzi.use.dtdl.semantic.DTDLContext;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
@@ -12,6 +14,10 @@ import org.tzi.use.main.Session;
 import org.tzi.use.gui.util.CloseOnEscapeKeyListener;
 import org.tzi.use.gui.util.ExtFileFilter;
 import org.tzi.use.config.Options;
+import org.tzi.use.uml.mm.MAssociation;
+import org.tzi.use.uml.mm.MAssociationEnd;
+import org.tzi.use.uml.mm.MClass;
+import org.tzi.use.uml.mm.MModel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -19,6 +25,10 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.PrintWriter;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.List;
 
 
 public class DTDLForm extends JDialog {
@@ -92,6 +102,7 @@ public class DTDLForm extends JDialog {
     }
 
     private void loadDTDL() {
+        MModel targetModel = null;
         String path = filePathField.getText();
         if (path == null || path.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Please select a DTDL file first.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -144,7 +155,79 @@ public class DTDLForm extends JDialog {
 
         DTDLModel canonical = analyzer.getRegistry().getCanonicalModel();
         System.out.println("Canonical DTDL model (all registered interfaces):" + canonical.getInterfaces().size());
-        canonical.prints();
+//        canonical.prints();
+
+
+        // 5. Mapping via UseModelApi
+        try {
+            UseModelApi useModelApi = new UseModelApi(session.system().model());
+
+            DTDLToMModelMapper mapper = new DTDLToMModelMapper(model, useModelApi, logWriter, analyzer.getRegistry());
+
+            MModel mappedModel = mapper.map();
+
+            // debug: print associations present in session/system model (the model our UI will get)
+            MModel mm = session.system().model();
+            System.out.println("[DTDLForm] Model after mapping: " + mm.name()
+                    + " (dataTypes=" + mm.dataTypes().size()
+                    + ", classes=" + mm.classes().size()
+                    + ", associations=" + mm.associations().size() + ")");
+
+            for (MAssociation a : mm.associations()) {
+                try {
+                    List<MAssociationEnd> ends = a.associationEnds();
+                    String e0cls = ends.size()>0 && ends.get(0).cls()!=null ? ends.get(0).cls().name() : "<null>";
+                    String e0role = ends.size()>0 ? ends.get(0).name() : "<null>";
+                    String e1cls = ends.size()>1 && ends.get(1).cls()!=null ? ends.get(1).cls().name() : "<null>";
+                    String e1role = ends.size()>1 ? ends.get(1).name() : "<null>";
+                    System.out.println("[DTDLForm] association: " + a.name() + "  ends: " + e0cls + ":" + e0role + " <-> " + e1cls + ":" + e1role);
+                } catch (Throwable t) {
+                    t.printStackTrace(logWriter);
+                }
+            }
+
+            System.out.println("[DTDLForm] classes and annotations:");
+            for (MClass c : mm.classes()) {
+                StringBuilder sb = new StringBuilder();
+                sb.append(" - ").append(c.name()).append(" annotations=");
+                try {
+                    // try common getter names
+                    Method m = c.getClass().getMethod("annotations");
+                    Object anns = m.invoke(c);
+                    sb.append(String.valueOf(anns));
+                } catch (Throwable t) {
+                    // fallback: iterate possible methods
+                    sb.append("<no-annotations-method>");
+                }
+                System.out.println(sb.toString());
+            }
+
+            SwingUtilities.invokeLater(() ->
+                    mainWindow.getModelBrowser().setModel(session.system().model())
+            );
+
+            JOptionPane.showMessageDialog(
+                    mainWindow,
+                    "DTDL loaded and mapped successfully.\nInterfaces: " +
+                            canonical.getInterfaces().size(),
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+            closeDialog();
+
+        } catch (Exception ex) {
+            ex.printStackTrace(logWriter);
+            JOptionPane.showMessageDialog(
+                    this,
+                    "Mapping failed: " + ex.getMessage(),
+                    "Mapping Error",
+                    JOptionPane.ERROR_MESSAGE
+            );
+        }
+
+        session.system().ensureStateLinkSetsForModel();
+        session.system().state().updateDerivedValues(true);
 
 
         // 5. Success
@@ -156,22 +239,6 @@ public class DTDLForm extends JDialog {
         );
 
         closeDialog();
-
-//        Collection<Interface> ifaces = canonical.getInterfaces().values();
-//
-//        // populate a small chooser (JList, JComboBox) with iface.getId() / getDisplayName()
-//        JComboBox<String> box = new JComboBox<>();
-//        for (Interface inface : ifaces) box.addItem(inface.getId());
-//
-//        // when user presses "Create instance" button:
-//        String selectedId = (String) box.getSelectedItem();
-//        Interface selectedIface = canonical.getInterface(selectedId);
-//
-//        // create instance in your DTDLSystem (keep system instance somewhere)
-//        DTDLSystem system = new DTDLSystem(sharedRegistry, analyzer.getContext());
-//        DTDLInstance inst = system.createInstance(selectedIface, null, Map.of("capacity", 30));
-//        system.startInstance(inst.getId());
-
     }
 
     private void closeDialog() {
