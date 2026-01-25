@@ -3,19 +3,19 @@
 <plugin name="use-dtdl" version="0.1" publisher="Hoang Minh Phuc">
     <actions>
         <action
-                label="use-dtdl"
+                label="load-dtdl-specification"
                 icon=""
-                class="org.tzi.use.dtdl.actions.OpenExamplePlugin"
-                tooltip="Show example dialog"
-                menu="Example Plugin"
-                menuitem="Run Example Action"
-                toolbaritem="Example Action"
-                id="org.tzi.use.dtdl.actions.OpenExamplePlugin">
+                class="org.tzi.use.dtdl.actions.LoadDTDLSpecificationAction"
+                tooltip="Load a JSON-LD DTDL specification"
+                menu="use-dtdl"
+                menuitem="Load DTDL specification"
+                toolbaritem="Load DTDL specification"
+                id="org.tzi.use.dtdl.actions.LoadDTDLSpecificationAction">
         </action>
         <action
                 label="DTDL Diagram"
                 class="org.tzi.use.dtdl.actions.OpenDTDLDiagramAction"
-                menu="Example Plugin"
+                menu="use-dtdl"
                 menuitem="DTDL Diagram"
                 toolbaritem="DTDL Diagram"
                 tooltip="Create DTDL diagram view"
@@ -24,7 +24,7 @@
         <action
                 label="Create DTDL Instance"
                 class="org.tzi.use.dtdl.actions.CreateInstanceAction"
-                menu="Example Plugin"
+                menu="use-dtdl"
                 menuitem="Create Instance"
                 toolbaritem="Create Instance"
                 tooltip="Create DTDL runtime instance for a registered Interface"
@@ -33,7 +33,7 @@
         <action
                 label="Manage telemetry data"
                 class="org.tzi.use.dtdl.actions.ManageTelemetryAction"
-                menu="Example Plugin"
+                menu="use-dtdl"
                 menuitem="Manage telemetry data"
                 toolbaritem="Manage telemetry data"
                 tooltip="Manage telemetry data"
