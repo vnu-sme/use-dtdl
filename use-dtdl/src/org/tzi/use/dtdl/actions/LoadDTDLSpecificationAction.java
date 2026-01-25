@@ -1,16 +1,12 @@
 package org.tzi.use.dtdl.actions;
 
-import org.tzi.use.api.UseApiException;
 import org.tzi.use.dtdl.gui.DTDLForm;
-import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.gui.main.MainWindow;
 import org.tzi.use.main.Session;
 import org.tzi.use.runtime.gui.IPluginAction;
 import org.tzi.use.runtime.gui.IPluginActionDelegate;
-import org.tzi.use.uml.mm.MModel;
-import org.tzi.use.api.UseModelApi;
 
-public class OpenExamplePlugin implements IPluginActionDelegate {
+public class LoadDTDLSpecificationAction implements IPluginActionDelegate {
     @Override
     public void performAction(IPluginAction pluginAction) {
         Session session = pluginAction.getSession();

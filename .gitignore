@@ -118,3 +118,7 @@ fabric.properties
 target/
 
 .github
+read_file.ps1
+run_use_with_plugin.ps1
+.gitignore
+output.txt

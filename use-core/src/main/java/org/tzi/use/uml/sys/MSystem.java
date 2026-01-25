@@ -1652,4 +1652,12 @@ public final class MSystem {
 		fCurrentState.insertLink(link);
         fireLinkInserted(link);
 	}
+
+    /**
+     * Synchronize the current system state with the changed model.
+     * This will create missing link sets for associations added after system creation.
+     */
+    public void ensureStateLinkSetsForModel() {
+        this.fCurrentState.ensureLinkSetsForModel();
+    }
 }
