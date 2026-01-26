@@ -18,6 +18,7 @@ import org.tzi.use.uml.mm.MAssociation;
 import org.tzi.use.uml.mm.MAssociationEnd;
 import org.tzi.use.uml.mm.MClass;
 import org.tzi.use.uml.mm.MModel;
+import org.tzi.use.uml.sys.MSystem;
 
 import javax.swing.*;
 import java.awt.*;
@@ -158,6 +159,10 @@ public class DTDLForm extends JDialog {
 //        canonical.prints();
 
 
+        // 4.1. Ensure a System+Model exists before mapping
+        ensureSystemInitialized(file);
+
+
         // 5. Mapping via UseModelApi
         try {
             UseModelApi useModelApi = new UseModelApi(session.system().model());
@@ -244,5 +249,68 @@ public class DTDLForm extends JDialog {
     private void closeDialog() {
         setVisible(false);
         dispose();
+    }
+
+    private void ensureSystemInitialized(File sourceFile) {
+        try {
+            boolean needCreate = false;
+
+            try {
+                if (session.system() == null) {
+                    needCreate = true;
+                } else if (session.system().model() == null) {
+                    needCreate = true;
+                }
+            } catch (Throwable t) {
+                needCreate = true;
+            }
+
+            if (!needCreate) {
+                return;
+            }
+
+            // derive model name from source file
+            String base = sourceFile.getName();
+            int idx = base.lastIndexOf('.');
+            if (idx > 0) {
+                base = base.substring(0, idx);
+            }
+
+            String modelName = base.replaceAll("[^A-Za-z0-9_]", "_");
+            if (modelName.isEmpty()) {
+                modelName = "unnamed";
+            }
+
+            // create new empty model via UseModelApi (uses ModelFactory internally)
+            UseModelApi api = new UseModelApi(modelName);
+            MModel model = api.getModel();
+
+            // create new system
+            MSystem system = new MSystem(model);
+            session.setSystem(system);
+
+            try {
+                system.ensureStateLinkSetsForModel();
+                system.state().updateDerivedValues(true);
+            } catch (Throwable t) {
+                t.printStackTrace(logWriter);
+            }
+
+            if (logWriter != null) {
+                logWriter.println(
+                        "[DTDLForm] created new MModel/MSystem: " + modelName
+                );
+            }
+
+        } catch (Exception ex) {
+            // never crash import because of bootstrap
+            ex.printStackTrace(logWriter);
+            if (logWriter != null) {
+                logWriter.println(
+                        "[DTDLForm] Warning: failed to bootstrap system/model: "
+                                + ex.getMessage()
+                );
+            }
+        }
     }
 }
