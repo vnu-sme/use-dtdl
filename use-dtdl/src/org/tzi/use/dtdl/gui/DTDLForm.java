@@ -14,10 +14,8 @@ import org.tzi.use.main.Session;
 import org.tzi.use.gui.util.CloseOnEscapeKeyListener;
 import org.tzi.use.gui.util.ExtFileFilter;
 import org.tzi.use.config.Options;
-import org.tzi.use.uml.mm.MAssociation;
-import org.tzi.use.uml.mm.MAssociationEnd;
-import org.tzi.use.uml.mm.MClass;
-import org.tzi.use.uml.mm.MModel;
+import org.tzi.use.uml.mm.*;
+import org.tzi.use.uml.ocl.type.EnumType;
 import org.tzi.use.uml.sys.MSystem;
 
 import javax.swing.*;
