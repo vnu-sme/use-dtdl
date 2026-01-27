@@ -209,15 +209,7 @@ public class DTDLForm extends JDialog {
                     mainWindow.getModelBrowser().setModel(session.system().model())
             );
 
-            JOptionPane.showMessageDialog(
-                    mainWindow,
-                    "DTDL loaded and mapped successfully.\nInterfaces: " +
-                            canonical.getInterfaces().size(),
-                    "Success",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-
-            closeDialog();
+//            closeDialog();
 
         } catch (Exception ex) {
             ex.printStackTrace(logWriter);
@@ -236,12 +228,13 @@ public class DTDLForm extends JDialog {
         // 5. Success
         JOptionPane.showMessageDialog(
                 mainWindow,
-                "Loaded DTDL successfully.\nInterfaces: " + model.getInterfaces().size(),
+                "DTDL loaded and mapped successfully.\nInterfaces: " +
+                        canonical.getInterfaces().size(),
                 "Success",
                 JOptionPane.INFORMATION_MESSAGE
         );
 
-        closeDialog();
+//        closeDialog();
     }
 
     private void closeDialog() {

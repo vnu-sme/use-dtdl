@@ -1,10 +1,9 @@
-package org.tzi.use.dtdl.gui;
+package org.tzi.use.dtdl.gui.instance;
 
 import org.tzi.use.api.UseApiException;
 import org.tzi.use.api.UseModelApi;
 import org.tzi.use.api.UseSystemApi;
-import org.tzi.use.dtdl.DTDLModel.DTDLModel;
-import org.tzi.use.dtdl.DTDLModel.Interface;
+import org.tzi.use.dtdl.DTDLModel.*;
 import org.tzi.use.dtdl.DTDLModel.Schema.*;
 import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
 import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumValue;
@@ -14,17 +13,14 @@ import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
 import org.tzi.use.dtdl.DTDLModel.Component.Component;
 import org.tzi.use.dtdl.actions.DTDLPluginState;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
-import org.tzi.use.dtdl.semantic.SemanticAnalyzerImpl;
+import org.tzi.use.dtdl.use.UseRuntimeService;
+import org.tzi.use.dtdl.util.Utils;
 import org.tzi.use.gui.main.MainWindow;
 import org.tzi.use.main.Session;
 import org.tzi.use.gui.util.CloseOnEscapeKeyListener;
 import org.tzi.use.uml.mm.*;
-import org.tzi.use.uml.ocl.type.*;
-import org.tzi.use.uml.sys.MInstance;
 import org.tzi.use.uml.sys.MObject;
-import org.tzi.use.uml.sys.MSystem;
 import org.tzi.use.uml.ocl.value.*;
-import org.tzi.use.uml.ocl.type.EnumType;
 
 import javax.swing.*;
 import javax.swing.text.NumberFormatter;
@@ -35,6 +31,9 @@ import java.text.NumberFormat;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.tzi.use.dtdl.gui.instance.SchemaInputFactory.resolveNamedSchema;
+import static org.tzi.use.dtdl.gui.instance.SchemaInputFactory.tryCoerceToSchema;
 
 public class CreateInstanceDialog extends JDialog {
     private final Session session;
@@ -52,10 +51,14 @@ public class CreateInstanceDialog extends JDialog {
     private final Map<String, JComboBox<String>> compInputs = new LinkedHashMap<>();
     private final Map<String, JComboBox<String>> relInputs = new LinkedHashMap<>();
 
+    private final UseRuntimeService useService;
+
     public CreateInstanceDialog(Session session, MainWindow parent) {
         super(parent, "Create USE Object", true);
         this.session = session;
         this.parent = parent;
+        this.useService = new UseRuntimeService(session);
+
         setLayout(new BorderLayout());
         setResizable(true);
 
@@ -65,25 +68,89 @@ public class CreateInstanceDialog extends JDialog {
         createBtn = new JButton("Create");
         cancelBtn = new JButton("Cancel");
         statusLabel = new JLabel(" ");
+        statusLabel.setVerticalAlignment(SwingConstants.CENTER);
 
-        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        top.add(new JLabel("Interface:"));
-        top.add(ifaceCombo);
-        top.add(new JLabel("Object name (optional):"));
-        top.add(nameField);
+
+        JPanel top = new JPanel(new GridBagLayout());
+        top.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        GridBagConstraints tbc = new GridBagConstraints();
+        tbc.insets = new Insets(4, 6, 4, 6);
+        tbc.anchor = GridBagConstraints.WEST;
+
+        tbc.gridx = 0; tbc.gridy = 0;
+        top.add(new JLabel("Interface"), tbc);
+
+        tbc.gridx = 1; tbc.fill = GridBagConstraints.HORIZONTAL; tbc.weightx = 1.0;
+        ifaceCombo.setPreferredSize(new Dimension(260, 26));
+        top.add(ifaceCombo, tbc);
+
+        tbc.gridx = 0; tbc.gridy = 1; tbc.weightx = 0; tbc.fill = GridBagConstraints.NONE;
+        top.add(new JLabel("Object name"), tbc);
+
+        tbc.gridx = 1; tbc.fill = GridBagConstraints.HORIZONTAL; tbc.weightx = 1.0;
+        nameField.setPreferredSize(new Dimension(260, 26));
+        top.add(nameField, tbc);
+
         add(top, BorderLayout.NORTH);
 
-        JPanel centerWrap = new JPanel(new BorderLayout());
-        centerWrap.setBorder(BorderFactory.createTitledBorder("Initial attribute values / links"));
-        centerWrap.add(new JScrollPane(dynamicPanel), BorderLayout.CENTER);
-        add(centerWrap, BorderLayout.CENTER);
+        dynamicPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+
+        JScrollPane formScroll = new JScrollPane(dynamicPanel);
+        formScroll.setBorder(BorderFactory.createEmptyBorder());
+        formScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        formScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+
+
+        formScroll.setPreferredSize(new Dimension(500, 380));
+        formScroll.setMinimumSize(new Dimension(500, 200));
+
+        JPanel formWrap = new JPanel(new BorderLayout());
+        formWrap.setBorder(
+                BorderFactory.createCompoundBorder(
+                        BorderFactory.createEmptyBorder(6, 10, 6, 10),
+                        BorderFactory.createTitledBorder("Initial values & links")
+                )
+        );
+        formWrap.add(formScroll, BorderLayout.CENTER);
+        formWrap.setMinimumSize(new Dimension(450, 200));
+        formScroll.getVerticalScrollBar().setUnitIncrement(16);
+
+
+        // Status panel (small, fixed)
+        JPanel statusPanel = new JPanel(new BorderLayout());
+        statusPanel.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
+        statusPanel.add(statusLabel, BorderLayout.CENTER);
+        statusPanel.setMinimumSize(new Dimension(100, 28));
+
+        // SPLITTER
+        JSplitPane split = new JSplitPane(
+                JSplitPane.VERTICAL_SPLIT,
+                formWrap,
+                statusPanel
+        );
+        split.setResizeWeight(1.0);          // form gets all resizing
+        split.setDividerSize(6);
+        split.setBorder(null);
+        split.setContinuousLayout(true);
+
+        // Initial divider position
+        split.setDividerLocation(0.85);
+
+        add(split, BorderLayout.CENTER);
 
         JPanel south = new JPanel(new BorderLayout());
-        JPanel btns = new JPanel();
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 4));
+        btns.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+
+        createBtn.setPreferredSize(new Dimension(90, 28));
+        cancelBtn.setPreferredSize(new Dimension(90, 28));
+        createBtn.setFont(createBtn.getFont().deriveFont(Font.BOLD));
+
         btns.add(createBtn);
         btns.add(cancelBtn);
+
         south.add(btns, BorderLayout.NORTH);
-        south.add(statusLabel, BorderLayout.SOUTH);
         add(south, BorderLayout.SOUTH);
 
         populateInterfaces();
@@ -93,6 +160,13 @@ public class CreateInstanceDialog extends JDialog {
         cancelBtn.addActionListener(e -> { setVisible(false); dispose(); });
 
         pack();
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        int maxHeight = (int)(screen.height * 0.75);
+
+        Dimension d = getSize();
+        if (d.height > maxHeight) {
+            setSize(new Dimension(d.width, maxHeight));
+        }
         setLocationRelativeTo(parent);
         addKeyListener(new CloseOnEscapeKeyListener(this));
     }
@@ -135,27 +209,9 @@ public class CreateInstanceDialog extends JDialog {
         compInputs.clear();
         relInputs.clear();
 
-        Object sel = ifaceCombo.getSelectedItem();
-        if (sel == null) {
-            dynamicPanel.revalidate();
-            dynamicPanel.repaint();
-            pack();
-            return;
-        }
-        String show = sel.toString();
-        String ifaceId = comboToId.get(show);
-        if (ifaceId == null) {
-            dynamicPanel.revalidate();
-            dynamicPanel.repaint();
-            pack();
-            return;
-        }
-        DTDLModelRegistry registry = DTDLPluginState.registry();
-        org.tzi.use.dtdl.DTDLModel.Interface iface = registry.getCanonicalModel().getInterface(ifaceId);
+        org.tzi.use.dtdl.DTDLModel.Interface iface = getSelectedInterface();
         if (iface == null) {
-            dynamicPanel.revalidate();
-            dynamicPanel.repaint();
-            pack();
+            refreshEmptyForm();
             return;
         }
 
@@ -175,84 +231,36 @@ public class CreateInstanceDialog extends JDialog {
                 .collect(Collectors.toList());
 
         if (!props.isEmpty()) {
-            JLabel ph = new JLabel("Attributes:");
-            gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 1.0;
-            dynamicPanel.add(ph, gbc);
-            row++;
-            for (Property p : props) {
-                gbc.gridwidth = 1;
-                gbc.weightx = 0;
-                gbc.gridx = 0; gbc.gridy = row;
-                JLabel lbl = new JLabel(p.getName() + ":");
-                dynamicPanel.add(lbl, gbc);
+            row = addSectionHeader("Attributes", gbc, row);
 
-                gbc.gridx = 1; gbc.weightx = 1.0;
+            for (Property p : props) {
                 JComponent input = createInputForProperty(p, iface);
                 if (!nestedPropInputs.containsKey(p.getName())) {
                     propInputs.put(p.getName(), input);
                 }
-                dynamicPanel.add(input, gbc);
-                row++;
+                row = addLabeledRow(p.getName(), input, gbc, row);
             }
         }
 
         if (!comps.isEmpty()) {
-            JLabel ch = new JLabel("Components (select existing USE object or leave none):");
-            gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 1.0;
-            dynamicPanel.add(ch, gbc);
-            row++;
+            row = addSectionHeader("Components", gbc, row);
+
             for (Component c : comps) {
-                gbc.gridwidth = 1;
-                gbc.weightx = 0;
-                gbc.gridx = 0; gbc.gridy = row;
-                JLabel lbl = new JLabel(c.getName() + ":");
-                dynamicPanel.add(lbl, gbc);
-
-                gbc.gridx = 1; gbc.weightx = 1.0;
-                JComboBox<String> combo = new JComboBox<>();
-                combo.addItem("(none)");
                 String targetIfaceId = c.getSchemaInterface() != null ? c.getSchemaInterface().getId() : null;
-
-                List<String> useObjects = listUseObjectsForDtInterface(targetIfaceId);
-                if (useObjects.isEmpty()) {
-                    combo.addItem("(no matching USE objects)");
-                } else {
-                    for (String o : useObjects) combo.addItem(o);
-                }
-
+                JComboBox<String> combo = createUseObjectCombo(targetIfaceId);
                 compInputs.put(c.getName(), combo);
-                dynamicPanel.add(combo, gbc);
-                row++;
+                row = addLabeledRow(c.getName(), combo, gbc, row);
             }
         }
 
         if (!rels.isEmpty()) {
-            JLabel rh = new JLabel("Relationships (link to existing USE object or leave none):");
-            gbc.gridx = 0; gbc.gridy = row; gbc.gridwidth = 2; gbc.weightx = 1.0;
-            dynamicPanel.add(rh, gbc);
-            row++;
+            row = addSectionHeader("Relationships", gbc, row);
+
             for (Relationship r : rels) {
-                gbc.gridwidth = 1;
-                gbc.weightx = 0;
-                gbc.gridx = 0; gbc.gridy = row;
-                JLabel lbl = new JLabel(r.getName() + ":");
-                dynamicPanel.add(lbl, gbc);
-
-                gbc.gridx = 1; gbc.weightx = 1.0;
-                JComboBox<String> combo = new JComboBox<>();
-                combo.addItem("(none)");
-                String targetIfaceId = (r.getTarget() != null ? (r.getTarget() instanceof org.tzi.use.dtdl.DTDLModel.Interface ? ((org.tzi.use.dtdl.DTDLModel.Interface) r.getTarget()).getId() : r.getTarget().toString()) : null);
-
-                List<String> useObjects = listUseObjectsForDtInterface(targetIfaceId);
-                if (useObjects.isEmpty()) {
-                    combo.addItem("(no matching USE objects)");
-                } else {
-                    for (String o : useObjects) combo.addItem(o);
-                }
-
+                String targetIfaceId = (r.getTarget() != null ? (r.getTarget() != null ? r.getTarget().getId() : r.getTarget().toString()) : null);
+                JComboBox<String> combo = createUseObjectCombo(targetIfaceId);
                 relInputs.put(r.getName(), combo);
-                dynamicPanel.add(combo, gbc);
-                row++;
+                row = addLabeledRow(r.getName(), combo, gbc, row);
             }
         }
 
@@ -261,24 +269,18 @@ public class CreateInstanceDialog extends JDialog {
         pack();
     }
 
-    private List<String> listUseObjectsForDtInterface(String targetIfaceId) {
-        if (targetIfaceId == null) return Collections.emptyList();
+    private Interface getSelectedInterface() {
+        Object sel = ifaceCombo.getSelectedItem();
+        if (sel == null) return null;
+
+        String ifaceId = comboToId.get(sel.toString());
+        if (ifaceId == null) return null;
+
         DTDLModelRegistry registry = DTDLPluginState.registry();
-        Optional<String> mapped = registry != null ? registry.getClassNameForDtmi(targetIfaceId) : Optional.empty();
-        String targetClass = mapped.orElseGet(() -> sanitize(targetIfaceId));
-        if (session == null || session.system() == null) return Collections.emptyList();
-        Set<MObject> all = session.system().state().allObjects();
-        List<String> names = new ArrayList<>();
-        for (MObject o : all) {
-            MClass cls = o.cls();
-            if (cls != null && Objects.equals(cls.name(), targetClass)) {
-                names.add(o.name());
-            }
-        }
-        return names;
+        return registry.getCanonicalModel().getInterface(ifaceId);
     }
 
-    private JComponent createInputForProperty(Property p, org.tzi.use.dtdl.DTDLModel.Interface iface) {
+    private JComponent createInputForProperty(Property p, Interface iface) {
         org.tzi.use.dtdl.DTDLModel.Schema.Schema s = resolveNamedSchema(p.getSchema(), iface);
         if (s instanceof PrimitiveType pt) {
             return createPrimitiveInput(pt);
@@ -286,7 +288,13 @@ public class CreateInstanceDialog extends JDialog {
 
         if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object obj) {
             JPanel panel = new JPanel(new GridBagLayout());
-            panel.setBorder(BorderFactory.createEtchedBorder());
+            panel.setBorder(
+                    BorderFactory.createCompoundBorder(
+                            BorderFactory.createLineBorder(new Color(220, 220, 220)),
+                            BorderFactory.createEmptyBorder(6, 6, 6, 6)
+                    )
+            );
+            panel.setBackground(new Color(248, 248, 248));
             GridBagConstraints gbc = new GridBagConstraints();
             gbc.insets = new Insets(2,2,2,2);
             gbc.anchor = GridBagConstraints.WEST;
@@ -296,9 +304,7 @@ public class CreateInstanceDialog extends JDialog {
 
             Map<String, JComponent> fieldInputs = new LinkedHashMap<>();
             for (Field f : obj.getFields()) {
-                gbc.gridx = 0;
-                gbc.gridy = r;
-                gbc.weightx = 0;
+                gbc.gridx = 0; gbc.gridy = r; gbc.weightx = 0;
                 panel.add(new JLabel(f.getName() + ":"), gbc);
                 gbc.gridx = 1;
                 gbc.weightx = 1.0;
@@ -324,24 +330,7 @@ public class CreateInstanceDialog extends JDialog {
         return new JTextField(20);
     }
 
-    private org.tzi.use.dtdl.DTDLModel.Schema.Schema resolveNamedSchema(org.tzi.use.dtdl.DTDLModel.Schema.Schema s, org.tzi.use.dtdl.DTDLModel.Interface iface) {
-        if (s == null) return null;
-
-        if (s.getClass().getSimpleName().equals("NamedSchema")) {
-            try {
-                var ns = (org.tzi.use.dtdl.DTDLModel.NamedSchema) s;
-                String nm = ns.getName();
-                if (nm != null) {
-                    var resolved = iface.getSchemas().get(nm);
-                    if (resolved != null) return resolved;
-                }
-            } catch (ClassCastException ignored) {}
-        }
-
-        return s;
-    }
-
-    private JComponent createInputForSchema(org.tzi.use.dtdl.DTDLModel.Schema.Schema s, org.tzi.use.dtdl.DTDLModel.Interface iface) {
+    private JComponent createInputForSchema(Schema s, Interface iface) {
         s = resolveNamedSchema(s, iface);
 
         if (s instanceof PrimitiveType pt) return createPrimitiveInput(pt);
@@ -459,7 +448,7 @@ public class CreateInstanceDialog extends JDialog {
                 raw = null;
             }
 
-            org.tzi.use.dtdl.DTDLModel.Schema.Schema sch = resolveNamedSchema(p.getSchema(), iface);
+            Schema sch = resolveNamedSchema(p.getSchema(), iface);
             Object coerced = tryCoerceToSchema(raw, sch);
             if (raw != null && coerced == null) {
                 JOptionPane.showMessageDialog(this, "Invalid value for property " + key, "Validation error", JOptionPane.ERROR_MESSAGE);
@@ -469,19 +458,18 @@ public class CreateInstanceDialog extends JDialog {
         }
 
         try {
-            ensureSystemExists();
+            useService.ensureSystemExists();
 
             UseSystemApi sysApi = UseSystemApi.create(session);
             UseModelApi modelApi = new UseModelApi(session.system().model());
 
             Optional<String> mapped = registry.getClassNameForDtmi(ifaceId);
-            String className = mapped.orElseGet(() -> sanitize(ifaceId));
+            String className = mapped.orElseGet(() -> Utils.sanitize(ifaceId));
             if (session.system().model().getClass(className) == null) {
                 modelApi.createClass(className, false);
             }
 
-            String objectName = name != null ? name : null;
-            MObject obj = sysApi.createObject(className, objectName);
+            MObject obj = sysApi.createObject(className, name);
             String createdName = obj.name();
 
             for (Map.Entry<String, Object> en : collected.entrySet()) {
@@ -498,12 +486,12 @@ public class CreateInstanceDialog extends JDialog {
                 System.err.println("  raw value   = " + val + " (" + (val != null ? val.getClass() : "null") + ")");
                 System.err.println("  attr type   = " + attrType + " (" + (attrType != null ? attrType.getClass() : "null") + ")");
 
-                String oclExpr = toOclLiteral(val, attrType);
+                String oclExpr = useService.toOclLiteral(val, attrType);
 
                 System.err.println("  ocl literal = " + oclExpr);
 
                 Value value = null;
-                value = buildUseValue(attrType, val);
+                value = useService.buildUseValue(attrType, val);
                 try {
                     sysApi.setAttributeValueEx(session.system().state().objectByName(createdName), mAttr, value);
                     System.err.println("  assignment OK via setAttributeValueEx");
@@ -520,7 +508,7 @@ public class CreateInstanceDialog extends JDialog {
                 if (selItem == null) continue;
                 String s = selItem.toString();
                 if ("(none)".equals(s) || "(no matching USE objects)".equals(s)) continue;
-                String assoc = findAssociationBetweenClassesForRole(createdName, s, compName);
+                String assoc = useService.findAssociationBetweenClassesForRole(createdName, s, compName);
                 if (assoc != null) {
                     try {
                         sysApi.createLink(assoc, new String[]{createdName, s});
@@ -537,7 +525,7 @@ public class CreateInstanceDialog extends JDialog {
                 if (selItem == null) continue;
                 String s = selItem.toString();
                 if ("(none)".equals(s) || "(no matching USE objects)".equals(s)) continue;
-                String assoc = findAssociationBetweenClassesForRole(createdName, s, relName);
+                String assoc = useService.findAssociationBetweenClassesForRole(createdName, s, relName);
                 if (assoc != null) {
                     try {
                         sysApi.createLink(assoc, new String[]{createdName, s});
@@ -552,246 +540,57 @@ public class CreateInstanceDialog extends JDialog {
 
             statusLabel.setText("Created object: " + createdName);
             JOptionPane.showMessageDialog(this, "Created USE object: " + createdName, "Success", JOptionPane.INFORMATION_MESSAGE);
-            setVisible(false);
-            dispose();
+            nameField.setText("");
+            rebuildFormForSelectedInterface();
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Creation failed: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private void ensureSystemExists() {
-        boolean needCreate = false;
-        try {
-            if (session.system() == null) needCreate = true;
-            else if (session.system().model() == null) needCreate = true;
-        } catch (Throwable t) { needCreate = true; }
-        if (needCreate) {
-            String modelName = "unnamed";
-            UseModelApi tmp = new UseModelApi(modelName);
-            MModel m = tmp.getModel();
-            MSystem s = new MSystem(m);
-            session.setSystem(s);
-            try {
-                session.system().ensureStateLinkSetsForModel();
-                session.system().state().updateDerivedValues(true);
-            } catch (Throwable t) { /* ignore */ }
+    private JComboBox<String> createUseObjectCombo(String targetIfaceId) {
+        JComboBox<String> combo = new JComboBox<>();
+        combo.addItem("(none)");
+
+        List<String> useObjects = useService.listUseObjectsForDtInterface(targetIfaceId);
+        if (useObjects.isEmpty()) {
+            combo.addItem("(no matching USE objects)");
+        } else {
+            for (String o : useObjects) combo.addItem(o);
         }
+        return combo;
     }
 
-    public Value buildUseValue(org.tzi.use.uml.ocl.type.Type expectedType, Object raw) {
-        if (raw == null) {
-            return UndefinedValue.instance;
-        }
+    private int addLabeledRow(String label, JComponent input, GridBagConstraints gbc, int row) {
+        gbc.gridwidth = 1; gbc.weightx = 0; gbc.gridx = 0; gbc.gridy = row;
+        dynamicPanel.add(new JLabel(label + ":"), gbc);
 
-        /* =========================
-         * Primitive values
-         * ========================= */
-        if (raw instanceof Boolean) {
-            return BooleanValue.get((Boolean) raw);
-        }
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        dynamicPanel.add(input, gbc);
 
-        if (raw instanceof Integer) {
-            return new IntegerValue((Integer) raw);
-        }
-
-        if (raw instanceof Long) {
-            return new IntegerValue(((Long) raw).intValue());
-        }
-
-        if (raw instanceof Double || raw instanceof Float) {
-            return new RealValue(((Number) raw).doubleValue());
-        }
-
-        /* =========================
-         * Enum values
-         * ========================= */
-        if (expectedType instanceof EnumType && raw instanceof String) {
-            return new org.tzi.use.uml.ocl.value.EnumValue((EnumType) expectedType, (String) raw);
-        }
-
-        /* =========================
-         * Data type values
-         * ========================= */
-        if (expectedType instanceof MDataType && raw instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> rawValues = (Map<String, Object>) raw;
-
-            Map<String, Value> values = new LinkedHashMap<>();
-
-            MDataType dt = (MDataType) expectedType;
-            for (MAttribute attr : dt.attributes()) {
-                Object attrRaw = rawValues.get(attr.name());
-                Value attrValue = buildUseValue(attr.type(), attrRaw);
-                values.put(attr.name(), attrValue);
-            }
-
-            return new DataTypeValueValue(expectedType, null, values);
-        }
-
-        /* =========================
-         * Collection values
-         * ========================= */
-        if (expectedType instanceof CollectionType && raw instanceof Collection) {
-            CollectionType ct = (CollectionType) expectedType;
-            org.tzi.use.uml.ocl.type.Type elemType = ct.elemType();
-
-            Collection<Value> elements = new ArrayList<>();
-            for (Object o : (Collection<?>) raw) {
-                elements.add(buildUseValue(elemType, o));
-            }
-
-            if (ct instanceof SetType) {
-                return new SetValue(elemType, elements);
-            }
-
-            if (ct instanceof SequenceType) {
-                return new SequenceValue(elemType, elements);
-            }
-
-            if (ct instanceof BagType) {
-                return new BagValue(elemType, elements);
-            }
-
-            if (ct instanceof OrderedSetType) {
-                return new OrderedSetValue(elemType, elements);
-            }
-        }
-
-        /* =========================
-         * Object values
-         * ========================= */
-        if (expectedType instanceof MClassifier && raw instanceof MObject) {
-            return new ObjectValue((MClassifier) expectedType, (MObject) raw);
-        }
-
-        throw new IllegalArgumentException(
-                "Cannot build USE value for type=" + expectedType + ", raw=" + raw
-        );
+        return row + 1;
     }
 
-
-
-    /**
-     * Turn a runtime value into an OCL literal string appropriate for USE.
-     * Uses expectedType to special-case enums.
-     */
-    private String toOclLiteral(Object v, org.tzi.use.uml.ocl.type.Type expectedType) {
-        if (v == null) return "null";
-
-        // Enum: render EnumTypeName::LITERAL (no quotes)
-        try {
-            if (expectedType instanceof EnumType et && v instanceof String) {
-                String lit = ((String) v).trim();
-                // best-effort: use enum type name (fallback to toString if missing)
-                String enumTypeName;
-                System.err.println("[DEBUG] enum type detected:");
-                System.err.println("  enum name = " + et.name());
-                System.err.println("  literals = " + et.getLiterals());
-                try {
-                    enumTypeName = et.name();
-                } catch (Throwable t) {
-                    enumTypeName = et.toString();
-                }
-
-                return enumTypeName + "::" + lit;
-            }
-        } catch (Throwable ignored) {
-        }
-
-        // Booleans
-        if (v instanceof Boolean b) return b ? "true" : "false";
-
-        // Numbers (integers, doubles, etc.)
-        if (v instanceof Number n) return n.toString();
-
-        // Strings -> single-quoted
-        if (v instanceof String s) {
-            String esc = s.replace("\\", "\\\\").replace("'", "\\'");
-            return "'" + esc + "'";
-        }
-
-        // Maps/Lists or other complex types: we fallback to single-quoted string representation
-        String esc = String.valueOf(v).replace("\\", "\\\\").replace("'", "\\'");
-        return "'" + esc + "'";
+    private int addSectionHeader(String title, GridBagConstraints gbc, int row) {
+        gbc.gridx = 0;
+        gbc.gridy = row;
+        gbc.gridwidth = 2;
+        gbc.weightx = 1.0;
+        dynamicPanel.add(sectionHeader(title), gbc);
+        return row + 1;
     }
 
-    private Object tryCoerceToSchema(Object v, org.tzi.use.dtdl.DTDLModel.Schema.Schema schema) {
-        if (schema == null) return v;
-        if (v == null) return null;
-
-        if (schema instanceof PrimitiveType pt) {
-            String t = pt.getTypeName();
-            if (v instanceof String vs) {
-                String s = vs.trim();
-                switch (t) {
-                    case "boolean": if ("true".equalsIgnoreCase(s)) return Boolean.TRUE; if ("false".equalsIgnoreCase(s)) return Boolean.FALSE; return null;
-                    case "integer": try { return Integer.parseInt(s); } catch(Exception ex) { return null; }
-                    case "long": try { return Long.parseLong(s); } catch(Exception ex) { return null; }
-                    case "double": case "float": try { return Double.parseDouble(s); } catch(Exception ex) { return null; }
-                    case "string": return s;
-                    default: return s;
-                }
-            } else if (v instanceof Number n) {
-                switch (t) {
-                    case "integer": return n.intValue();
-                    case "long": return n.longValue();
-                    case "double": case "float": return n.doubleValue();
-                    default: return v;
-                }
-            } else if (v instanceof Boolean && "boolean".equals(t)) return v;
-            else return null;
-        }
-
-        if (schema instanceof org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum e) {
-            if (v instanceof String vs) {
-                for (EnumValue ev : e.getValues()) if (ev != null && ev.getName().equals(vs)) return vs;
-            }
-            return null;
-        }
-
-        if (schema instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object) {
-            if (v instanceof Map) return v;
-            return null;
-        }
-
-        if (schema instanceof Array) {
-            if (v instanceof List) return v;
-            return null;
-        }
-
-        return v;
+    private JLabel sectionHeader(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setFont(lbl.getFont().deriveFont(Font.BOLD));
+        lbl.setBorder(BorderFactory.createEmptyBorder(8, 0, 4, 0));
+        return lbl;
     }
 
-    private String findAssociationBetweenClassesForRole(String srcObjectName, String tgtObjectName, String roleName) {
-        if (session == null || session.system() == null) return null;
-        MModel mm = session.system().model();
-        if (mm == null) return null;
-        MObject src = session.system().state().objectByName(srcObjectName);
-        MObject tgt = session.system().state().objectByName(tgtObjectName);
-        if (src == null || tgt == null) return null;
-        String clsA = src.cls() != null ? src.cls().name() : null;
-        String clsB = tgt.cls() != null ? tgt.cls().name() : null;
-        if (clsA == null || clsB == null) return null;
-        for (MAssociation a : mm.associations()) {
-            List<MAssociationEnd> ends = a.associationEnds();
-            if (ends.size() != 2) continue;
-            MAssociationEnd e1 = ends.get(0);
-            MAssociationEnd e2 = ends.get(1);
-            boolean match = Objects.equals(e1.cls().name(), clsA) && Objects.equals(e2.cls().name(), clsB)
-                    && (roleName == null || Objects.equals(e1.name(), roleName) || Objects.equals(e2.name(), roleName));
-            boolean reverse = Objects.equals(e1.cls().name(), clsB) && Objects.equals(e2.cls().name(), clsA)
-                    && (roleName == null || Objects.equals(e1.name(), roleName) || Objects.equals(e2.name(), roleName));
-            if (match || reverse) return a.name();
-        }
-        return null;
-    }
-
-    private String sanitize(String id) {
-        if (id == null) return "Unnamed";
-        String s = id.replaceAll("[^A-Za-z0-9_]", "_");
-        if (s.isEmpty()) s = "Unnamed";
-        if (Character.isDigit(s.charAt(0))) s = "_" + s;
-        return s;
+    private void refreshEmptyForm() {
+        dynamicPanel.revalidate();
+        dynamicPanel.repaint();
+        pack();
     }
 }
