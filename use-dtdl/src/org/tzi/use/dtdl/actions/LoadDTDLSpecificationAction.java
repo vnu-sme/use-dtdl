@@ -16,6 +16,11 @@ public class LoadDTDLSpecificationAction implements IPluginActionDelegate {
         DTDLForm form = new DTDLForm(session, mainWindow, DTDLPluginState.registry());
         form.setVisible(true);
     }
+
+    @Override
+    public boolean shouldBeEnabled(IPluginAction action) {
+        return true; // enable even without .use model
+    }
 }
 
 //    @Override
