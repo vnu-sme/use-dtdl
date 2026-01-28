@@ -121,9 +121,8 @@ public class ASTInterface extends ASTNode {
                 ASTSchema as = null;
                 if (s instanceof ASTSchema) {
                     as = (ASTSchema) s;
-                } else if (s instanceof java.util.Map<?,?>) {
+                } else if (s instanceof Map<?, ?> m) {
                     // Build an ASTSchema skeleton from raw map to store in index (deferred resolution)
-                    Map<?,?> m = (Map<?,?>) s;
                     Object t = m.get("@type");
                     if (t instanceof String) {
                         switch ((String) t) {
@@ -154,6 +153,7 @@ public class ASTInterface extends ASTNode {
 
         // 3) Resolve the collected/registered schemas (resolve nested fields/values)
         for (ASTSchema s : new ArrayList<>(schemaIndex.values())) {
+            // ensure canonicalization and deep-resolve
             resolveSchema(s);
         }
         // Also resolve any schemas added via addSchema that might not have been in schemaIndex
@@ -213,30 +213,7 @@ public class ASTInterface extends ASTNode {
         p.name = (String) p.props.get("name");
         resolveGeneralInfo(p);
 
-        Object rawSchema = p.props.get("schema");
-        if (rawSchema instanceof String s)
-            p.schema = resolveSchemaRef(s);
-        else if (rawSchema instanceof ASTSchema as) {
-            p.schema = as;
-            resolveSchema(as);
-        } else if (rawSchema instanceof java.util.Map) {
-            // inline map describing a schema (should have been parsed to ASTSchema, but handle defensively)
-            Map<?,?> m = (Map<?,?>) rawSchema;
-            Object t = m.get("@type");
-            if (t instanceof String) {
-                ASTSchema as2 = switch ((String)t) {
-                    case "Enum" -> new ASTEnum();
-                    case "Object" -> new ASTObject();
-                    case "Map" -> new ASTMap();
-                    default -> null;
-                };
-                if (as2 != null) {
-                    as2.props.putAll((Map<? extends String, ?>) m);
-                    resolveSchema(as2);
-                    p.schema = as2;
-                }
-            }
-        }
+        p.schema = resolveSchemaFromProps(p.props.get("schema"));
 
         Object w = p.props.get("writable");
         if (w instanceof Boolean)
@@ -247,88 +224,40 @@ public class ASTInterface extends ASTNode {
         t.name = (String) t.props.get("name");
         resolveGeneralInfo(t);
 
-        Object raw = t.props.get("schema");
-        if (raw instanceof String) {
-            t.schema = resolveSchemaRef((String) raw);
-        } else if (raw instanceof ASTSchema as) {
-            t.schema = as;
-            resolveSchema(as);
-        } else if (raw instanceof java.util.Map) {
-            Map<?,?> m = (Map<?,?>) raw;
-            Object tt = m.get("@type");
-            if (tt instanceof String) {
-                ASTSchema as2 = switch ((String)tt) {
-                    case "Enum" -> new ASTEnum();
-                    case "Object" -> new ASTObject();
-                    case "Map" -> new ASTMap();
-                    default -> null;
-                };
-                if (as2 != null) {
-                    as2.props.putAll((Map<? extends String, ?>) m);
-                    resolveSchema(as2);
-                    t.schema = as2;
-                }
-            }
-        }
+        t.schema = resolveSchemaFromProps(t.props.get("schema"));
     }
 
     void resolveCommand(ASTCommand c) {
         c.name = (String) c.props.get("name");
         resolveGeneralInfo(c);
 
-        Object req = c.props.get("request");
-        if (req instanceof ASTContent rc)
-            c.request = resolveCommandPayload(rc);
-        else if (req instanceof java.util.Map<?,?> m) {
-            ASTContent rc2 = new ASTContent(){};
-            rc2.props.putAll((Map<? extends String, ?>) m);
-            if (m.get("name") instanceof String) rc2.name = (String) m.get("name");
-            c.request = resolveCommandPayload(rc2);
+        ASTContent req = ASTContent.fromRaw(c.props.get("request"));
+        if (req != null) {
+            c.request = resolveCommandPayload(req);
         }
 
-        Object res = c.props.get("response");
-        if (res instanceof ASTContent rc2)
-            c.response = resolveCommandPayload(rc2);
-        else if (res instanceof java.util.Map<?,?> m2) {
-            ASTContent rc3 = new ASTContent(){};
-            rc3.props.putAll((Map<? extends String, ?>) m2);
-            if (m2.get("name") instanceof String) rc3.name = (String) m2.get("name");
-            c.response = resolveCommandPayload(rc3);
+        ASTContent res = ASTContent.fromRaw(c.props.get("response"));
+        if (res != null) {
+            c.response = resolveCommandPayload(res);
         }
     }
 
     ASTCommandPayload resolveCommandPayload(ASTContent raw) {
         ASTCommandPayload p = new ASTCommandPayload();
+
+        // copy props so validation can read them
+        if (raw.props != null) p.props.putAll(raw.props);
+
+        resolveGeneralInfo(p);
+
         p.name = raw.name;
-        resolveGeneralInfo(raw);
         p.id = raw.id;
         p.description = raw.description;
         p.displayName = raw.displayName;
         p.type = raw.type;
         p.comment = raw.comment;
 
-        Object s = raw.props.get("schema");
-        if (s instanceof String) {
-            p.schema = resolveSchemaRef((String)s);
-        } else if (s instanceof ASTSchema as) {
-            p.schema = as;
-            resolveSchema(as);
-        } else if (s instanceof java.util.Map<?,?> m) {
-            Object tt = m.get("@type");
-            if (tt instanceof String) {
-                ASTSchema as2 = switch ((String)tt) {
-                    case "Enum" -> new ASTEnum();
-                    case "Object" -> new ASTObject();
-                    case "Map" -> new ASTMap();
-                    default -> null;
-                };
-                if (as2 != null) {
-                    as2.props.putAll((Map<? extends String, ?>) m);
-                    resolveSchema(as2);
-                    p.schema = as2;
-                }
-            }
-        }
+        p.schema = resolveSchemaFromProps(raw.props.get("schema"));
 
         Object nullable = raw.props.get("nullable");
         if (nullable instanceof Boolean) p.nullable = (Boolean) nullable;
@@ -340,13 +269,20 @@ public class ASTInterface extends ASTNode {
         r.name = (String) r.props.get("name");
         resolveGeneralInfo(r);
         r.targetInterface = (String) r.props.get("target");
+
         Object min = r.props.get("minMultiplicity");
         Object max = r.props.get("maxMultiplicity");
+
         if (min instanceof String) {
-            try { r.minMultiplicity = Integer.parseInt((String)min); } catch(Exception ignore){}
+            try {
+                r.minMultiplicity = Integer.parseInt((String)min);
+            } catch(Exception ignore){}
         } else if (min instanceof Number) r.minMultiplicity = ((Number)min).intValue();
+
         if (max instanceof String) {
-            try { r.maxMultiplicity = Integer.parseInt((String)max); } catch(Exception ignore){}
+            try {
+                r.maxMultiplicity = Integer.parseInt((String)max);
+            } catch(Exception ignore){}
         } else if (max instanceof Number) r.maxMultiplicity = ((Number)max).intValue();
 
         Object wr = r.props.get("writable");
@@ -385,9 +321,23 @@ public class ASTInterface extends ASTNode {
         }
     }
 
-    void resolveSchema(ASTSchema s) {
-        if (s == null) return;
+    ASTSchema resolveSchema(ASTSchema s) {
+        if (s == null) return null;
 
+        // If schema has an @id and an existing canonical schema is present, return it
+        Object idRaw = s.props.get("@id");
+        if (idRaw instanceof String id) {
+            ASTSchema existing = schemaIndex.get(id);
+            if (existing != null && existing != s) {
+                // ensure basic info on existing is populated
+                resolveGeneralInfo(existing);
+                return existing;
+            }
+            // register this schema into index if not present
+            schemaIndex.putIfAbsent(id, s);
+        }
+
+        // populate general info for this schema
         resolveGeneralInfo(s);
 
         if (s instanceof ASTEnum e) {
@@ -397,6 +347,7 @@ public class ASTInterface extends ASTNode {
                     e.valueSchema = (ASTPrimitiveSchema) resolveSchemaRef((String)vs);
                 } catch (Exception ex) { /* ignore */ }
             } else if (vs instanceof ASTSchema as) {
+                as = resolveSchema(as);
                 if (as instanceof ASTPrimitiveSchema) e.valueSchema = (ASTPrimitiveSchema) as;
             }
 
@@ -426,33 +377,14 @@ public class ASTInterface extends ASTNode {
             if (rawFields instanceof List<?>) {
                 for (Object item : (List<?>) rawFields) {
                     if (item instanceof ASTField af) {
-                        if (af.schema != null) resolveSchema(af.schema);
+                        if (af.schema != null) af.schema = resolveSchema(af.schema);
                         out.add(af);
                     } else if (item instanceof java.util.Map<?,?> m) {
                         ASTField nf = new ASTField();
                         Object nm = m.get("name");
                         if (nm instanceof String) nf.name = (String) nm;
-                        Object schemar = m.get("schema");
-                        if (schemar instanceof String) nf.schema = resolveSchemaRef((String)schemar);
-                        else if (schemar instanceof ASTSchema as) {
-                            nf.schema = as;
-                            resolveSchema(as);
-                        } else if (schemar instanceof java.util.Map<?,?> mm) {
-                            Object tt = mm.get("@type");
-                            if (tt instanceof String) {
-                                ASTSchema as2 = switch ((String)tt) {
-                                    case "Enum" -> new ASTEnum();
-                                    case "Object" -> new ASTObject();
-                                    case "Map" -> new ASTMap();
-                                    default -> null;
-                                };
-                                if (as2 != null) {
-                                    as2.props.putAll((Map<? extends String, ?>) mm);
-                                    resolveSchema(as2);
-                                    nf.schema = as2;
-                                }
-                            }
-                        }
+
+                        nf.schema = resolveSchemaFromProps(m.get("schema"));
                         out.add(nf);
                     }
                 }
@@ -464,7 +396,8 @@ public class ASTInterface extends ASTNode {
             Object rawValue = s.props.get("mapValue");
 
             if (rawKey instanceof ASTMapKey mk) {
-                // maybe already constructed
+                if (mk.schema != null) mk.schema = resolveSchema(mk.schema);
+                m.mapKey = mk;
             } else if (rawKey instanceof java.util.Map<?,?> mm) {
                 ASTMapKey mk = new ASTMapKey();
                 Object nm = mm.get("name");
@@ -472,67 +405,60 @@ public class ASTInterface extends ASTNode {
                 Object sk = mm.get("schema");
                 if (sk instanceof String) mk.schema = resolveSchemaRef((String) sk);
                 else if (sk instanceof ASTSchema) {
-                    // store string representation if needed
                     mk.schema = (ASTSchema) sk;
-                    resolveSchema(mk.schema);
+                    mk.schema = resolveSchema(mk.schema);
                 }
                 m.mapKey = mk;
             }
 
             if (rawValue instanceof ASTMapValue mv) {
-                // already constructed
+                if (mv.schema != null) mv.schema = resolveSchema(mv.schema);
+                m.mapValue = mv;
             } else if (rawValue instanceof java.util.Map<?,?> mmv) {
                 ASTMapValue mv = new ASTMapValue();
                 Object nm = mmv.get("name");
                 if (nm instanceof String) mv.name = (String) nm;
-                Object sv = mmv.get("schema");
-                if (sv instanceof String) mv.schema = resolveSchemaRef((String) sv);
-                else if (sv instanceof ASTSchema asv) {
-                    mv.schema = asv;
-                    resolveSchema(asv);
-                } else if (sv instanceof java.util.Map<?,?> mm2) {
-                    Object tt = mm2.get("@type");
-                    if (tt instanceof String) {
-                        ASTSchema as2 = switch ((String)tt) {
-                            case "Enum" -> new ASTEnum();
-                            case "Object" -> new ASTObject();
-                            case "Map" -> new ASTMap();
-                            default -> null;
-                        };
-                        if (as2 != null) {
-                            as2.props.putAll((Map<? extends String, ?>) mm2);
-                            resolveSchema(as2);
-                            mv.schema = as2;
-                        }
-                    }
-                }
+
+                mv.schema = resolveSchemaFromProps(mmv.get("schema"));
+
                 m.mapValue = mv;
             }
         }
         else if (s instanceof ASTArray a) {
-            Object rawEl = s.props.get("elementSchema");
-            if (rawEl instanceof String) {
-                a.elementSchema = resolveSchemaRef((String) rawEl);
-            } else if (rawEl instanceof ASTSchema as) {
-                a.elementSchema = as;
-                resolveSchema(as);
-            } else if (rawEl instanceof java.util.Map<?,?> mm) {
-                Object tt = mm.get("@type");
-                if (tt instanceof String) {
-                    ASTSchema as2 = switch ((String)tt) {
-                        case "Enum" -> new ASTEnum();
-                        case "Object" -> new ASTObject();
-                        case "Map" -> new ASTMap();
-                        default -> null;
-                    };
-                    if (as2 != null) {
-                        as2.props.putAll((Map<? extends String, ?>) mm);
-                        resolveSchema(as2);
-                        a.elementSchema = as2;
-                    }
+            a.elementSchema = resolveSchemaFromProps(s.props.get("elementSchema"));
+        }
+
+        return s;
+    }
+
+    private ASTSchema resolveSchemaFromProps(Object rawSchema) {
+        if (rawSchema instanceof String s) {
+            return resolveSchemaRef(s);
+        }
+
+        if (rawSchema instanceof ASTSchema as) {
+            return resolveSchema(as);
+        }
+
+        if (rawSchema instanceof java.util.Map) {
+            Map<?,?> m = (Map<?,?>) rawSchema;
+            Object t = m.get("@type");
+            if (t instanceof String) {
+                ASTSchema as2 = switch ((String) t) {
+                    case "Enum" -> new ASTEnum();
+                    case "Object" -> new ASTObject();
+                    case "Map" -> new ASTMap();
+                    case "Array" -> new ASTArray();
+                    default -> null;
+                };
+                if (as2 != null) {
+                    as2.props.putAll((Map<? extends String, ?>) m);
+                    return resolveSchema(as2);
                 }
             }
         }
+
+        return null;
     }
 
     void resolveGeneralInfo(ASTContent n) {
