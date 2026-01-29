@@ -51,6 +51,7 @@ import org.tzi.use.uml.sys.MObjectState;
  * @author Lars Hamann
  */
 public class ObjectNode extends PlaceableNode implements SortChangeListener, ObjectNodeActivity {
+    private static final int MAX_VALUE_LEN = 40;
 
 	protected final ObjDiagramOptions fOpt;
 	private final NewObjectDiagramView fParent;
@@ -206,8 +207,9 @@ public class ObjectNode extends PlaceableNode implements SortChangeListener, Obj
 			} else {
 				value = val.toString();
 			}
+            String shortValue = shortenValue(value);
 
-			fValues[i] = (attr.isDerived() ? "/" : "") + attr.name() + "=" + value;
+			fValues[i] = (attr.isDerived() ? "/" : "") + attr.name() + "=" + shortValue;
 		}
 
 		for (int i = 0; i < fStateMachines.size(); i++) {
@@ -329,4 +331,10 @@ public class ObjectNode extends PlaceableNode implements SortChangeListener, Obj
 	public void setGreyed(boolean b) {
 		fIsGreyed = b;
 	}
+
+    private String shortenValue(String s) {
+        if (s == null) return "null";
+        if (s.length() <= MAX_VALUE_LEN) return s;
+        return s.substring(0, MAX_VALUE_LEN - 3) + "...";
+    }
 }
