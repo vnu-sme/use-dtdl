@@ -116,6 +116,37 @@
       }
     },
     {
+      "@type": "Property",
+      "name": "classSchedule",
+      "displayName": "Class Schedule",
+      "description": "List of scheduled classes for this classroom.",
+      "writable": true,
+      "schema": {
+        "@type": "Array",
+        "elementSchema": {
+          "@type": "Object",
+          "fields": [
+            {
+              "name": "courseCode",
+              "schema": "string"
+            },
+            {
+              "name": "instructor",
+              "schema": "string"
+            },
+            {
+              "name": "startTime",
+              "schema": "integer"
+            },
+            {
+              "name": "endTime",
+              "schema": "integer"
+            }
+          ]
+        }
+      }
+    },
+    {
       "@type": "Command",
       "name": "setLightingLevel",
       "request": {
