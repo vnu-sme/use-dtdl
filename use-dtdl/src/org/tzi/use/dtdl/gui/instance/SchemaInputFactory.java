@@ -74,6 +74,11 @@ public final class SchemaInputFactory  {
             return null;
         }
 
+        if (schema instanceof org.tzi.use.dtdl.DTDLModel.Schema.Map.Map) {
+            if (v instanceof Map) return v;
+            return null;
+        }
+
         return v;
     }
 }

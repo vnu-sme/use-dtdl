@@ -19,6 +19,7 @@ import org.tzi.use.gui.main.MainWindow;
 import org.tzi.use.main.Session;
 import org.tzi.use.gui.util.CloseOnEscapeKeyListener;
 import org.tzi.use.uml.mm.*;
+import org.tzi.use.uml.ocl.type.CollectionType;
 import org.tzi.use.uml.sys.MObject;
 import org.tzi.use.uml.ocl.value.*;
 
@@ -47,9 +48,19 @@ public class CreateInstanceDialog extends JDialog {
 
     private final Map<String, String> comboToId = new LinkedHashMap<>();
     private final Map<String, JComponent> propInputs = new LinkedHashMap<>();
-    private final Map<String, Map<String, JComponent>> nestedPropInputs = new LinkedHashMap<>();
     private final Map<String, JComboBox<String>> compInputs = new LinkedHashMap<>();
     private final Map<String, JComboBox<String>> relInputs = new LinkedHashMap<>();
+    private final SchemaInputAdapter adapter = new SchemaInputAdapter() {
+        @Override
+        public JComponent createInputForSchema(Schema s, Interface iface) {
+            return CreateInstanceDialog.this.createInputForSchema(s, iface);
+        }
+
+        @Override
+        public Object extractValueFromInput(JComponent c) {
+            return CreateInstanceDialog.this.extractValueFromInput(c);
+        }
+    };
 
     private final UseRuntimeService useService;
 
@@ -205,7 +216,6 @@ public class CreateInstanceDialog extends JDialog {
     private void rebuildFormForSelectedInterface() {
         dynamicPanel.removeAll();
         propInputs.clear();
-        nestedPropInputs.clear();
         compInputs.clear();
         relInputs.clear();
 
@@ -235,9 +245,7 @@ public class CreateInstanceDialog extends JDialog {
 
             for (Property p : props) {
                 JComponent input = createInputForProperty(p, iface);
-                if (!nestedPropInputs.containsKey(p.getName())) {
-                    propInputs.put(p.getName(), input);
-                }
+                propInputs.put(p.getName(), input);
                 row = addLabeledRow(p.getName(), input, gbc, row);
             }
         }
@@ -287,35 +295,7 @@ public class CreateInstanceDialog extends JDialog {
         }
 
         if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object obj) {
-            JPanel panel = new JPanel(new GridBagLayout());
-            panel.setBorder(
-                    BorderFactory.createCompoundBorder(
-                            BorderFactory.createLineBorder(new Color(220, 220, 220)),
-                            BorderFactory.createEmptyBorder(6, 6, 6, 6)
-                    )
-            );
-            panel.setBackground(new Color(248, 248, 248));
-            GridBagConstraints gbc = new GridBagConstraints();
-            gbc.insets = new Insets(2,2,2,2);
-            gbc.anchor = GridBagConstraints.WEST;
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            gbc.weightx = 1.0;
-            int r = 0;
-
-            Map<String, JComponent> fieldInputs = new LinkedHashMap<>();
-            for (Field f : obj.getFields()) {
-                gbc.gridx = 0; gbc.gridy = r; gbc.weightx = 0;
-                panel.add(new JLabel(f.getName() + ":"), gbc);
-                gbc.gridx = 1;
-                gbc.weightx = 1.0;
-                JComponent fieldInput = createInputForSchema(f.getSchema(), iface);
-                panel.add(fieldInput, gbc);
-                fieldInputs.put(f.getName(), fieldInput);
-                r++;
-            }
-
-            nestedPropInputs.put(p.getName(), fieldInputs);
-            return panel;
+            return new ObjectInputPanel(obj.getFields(), iface, adapter);
         }
 
         if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum e) {
@@ -325,6 +305,14 @@ public class CreateInstanceDialog extends JDialog {
                 if (ev != null) cb.addItem(ev.getName());
             }
             return cb;
+        }
+
+        if (s instanceof Array arr) {
+            return new ArrayInputPanel(resolveNamedSchema(arr.getElementSchema(), iface), iface, adapter);
+        }
+
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Map.Map map) {
+            return new MapInputPanel(map, iface, adapter);
         }
 
         return new JTextField(20);
@@ -343,23 +331,15 @@ public class CreateInstanceDialog extends JDialog {
         }
 
         if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object obj) {
-            JPanel panel = new JPanel(new GridBagLayout());
-            panel.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
-            GridBagConstraints gbc = new GridBagConstraints();
-            gbc.insets = new Insets(2,2,2,2);
-            gbc.fill = GridBagConstraints.HORIZONTAL;
-            gbc.weightx = 1.0;
+            return new ObjectInputPanel(obj.getFields(), iface, adapter);
+        }
 
-            int r = 0;
-            for (Field f : obj.getFields()) {
-                gbc.gridx = 0; gbc.gridy = r; gbc.weightx = 0;
-                panel.add(new JLabel(f.getName()), gbc);
-                gbc.gridx = 1; gbc.weightx = 1.0;
-                panel.add(createInputForSchema(f.getSchema(), iface), gbc);
-                r++;
-            }
+        if (s instanceof Array arr) {
+            return new ArrayInputPanel(resolveNamedSchema(arr.getElementSchema(), iface), iface, adapter);
+        }
 
-            return panel;
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Map.Map map) {
+            return new MapInputPanel(map, iface, adapter);
         }
 
         return new JTextField(20);
@@ -400,6 +380,8 @@ public class CreateInstanceDialog extends JDialog {
     }
 
     private Object extractValueFromInput(JComponent comp) {
+        if (comp instanceof ValueProvider vp) return vp.getValue();
+
         if (comp instanceof JCheckBox cb) return cb.isSelected();
         if (comp instanceof JFormattedTextField ft) {
             Object v = ft.getValue();
@@ -432,29 +414,21 @@ public class CreateInstanceDialog extends JDialog {
         for (Property p : iface.getContents().stream().filter(c -> c instanceof Property).map(c -> (Property)c).collect(Collectors.toList())) {
             String key = p.getName();
             JComponent top = propInputs.get(key);
-            Object raw;
 
-            if (top != null) {
-                raw = extractValueFromInput(top);
-            } else if (nestedPropInputs.containsKey(key)) {
-                Map<String, JComponent> fields = nestedPropInputs.get(key);
-                Map<String, Object> m = new LinkedHashMap<>();
-                for (Map.Entry<String, JComponent> fe : fields.entrySet()) {
-                    Object fv = extractValueFromInput(fe.getValue());
-                    if (fv != null) m.put(fe.getKey(), fv);
-                }
-                raw = m.isEmpty() ? null : m;
-            } else {
-                raw = null;
-            }
+            Object raw = extractValueFromInput(propInputs.get(key));
 
-            Schema sch = resolveNamedSchema(p.getSchema(), iface);
-            Object coerced = tryCoerceToSchema(raw, sch);
-            if (raw != null && coerced == null) {
-                JOptionPane.showMessageDialog(this, "Invalid value for property " + key, "Validation error", JOptionPane.ERROR_MESSAGE);
+            // panels return InputValidation.INVALID when the user entered invalid data
+            if (raw == InputValidation.INVALID) {
+                JOptionPane.showMessageDialog(this,
+                        "Invalid value for property " + key,
+                        "Validation error",
+                        JOptionPane.ERROR_MESSAGE);
                 return;
             }
-            if (coerced != null) collected.put(key, coerced);
+
+            if (raw != null) {
+                collected.put(key, raw);
+            }
         }
 
         try {
@@ -490,11 +464,13 @@ public class CreateInstanceDialog extends JDialog {
 
                 System.err.println("  ocl literal = " + oclExpr);
 
-                Value value = null;
-                value = useService.buildUseValue(attrType, val);
+                Value value = useService.buildUseValue(attrType, val);
+
+
                 try {
                     sysApi.setAttributeValueEx(session.system().state().objectByName(createdName), mAttr, value);
                     System.err.println("  assignment OK via setAttributeValueEx");
+                    System.err.println("  stored value = " + value);
                 } catch (UseApiException assignEx) {
                     System.err.println("  assignment failed via setAttributeValueEx: " + assignEx.getMessage());
                 }

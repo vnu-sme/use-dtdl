@@ -91,8 +91,68 @@ public final class UseRuntimeService {
             return new RealValue(((Number) raw).doubleValue());
         }
 
+        if (expectedType instanceof StringType && raw instanceof String) {
+            return new StringValue((String) raw);
+        }
+
         if (expectedType instanceof EnumType && raw instanceof String) {
             return new org.tzi.use.uml.ocl.value.EnumValue((EnumType) expectedType, (String) raw);
+        }
+
+        if (expectedType instanceof SequenceType seqType && raw instanceof Map<?, ?> map) {
+            org.tzi.use.uml.ocl.type.Type elemType = seqType.elemType();
+
+            // collect entry values into a list (cannot call SequenceValue.add because it's not public)
+            List<Value> elements = new ArrayList<>();
+
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                if (!(elemType instanceof MDataType entryType)) {
+                    throw new IllegalArgumentException("Map entry element is not a DataType: " + elemType);
+                }
+
+                Map<String, Value> entryValues = new LinkedHashMap<>();
+
+                for (MAttribute a : entryType.attributes()) {
+                    if ("key".equals(a.name())) {
+                        entryValues.put("key", buildUseValue(a.type(), e.getKey()));
+                    } else if ("value".equals(a.name())) {
+                        entryValues.put("value", buildUseValue(a.type(), e.getValue()));
+                    } else {
+                        // if entryType has other attributes, try to map by name (optional)
+                        Object rawVal = null;
+                        // no raw source for other attributes -> leave undefined
+                        entryValues.put(a.name(), UndefinedValue.instance);
+                    }
+                }
+
+                elements.add(new DataTypeValueValue(entryType, null, entryValues));
+            }
+
+            return new SequenceValue(elemType, elements);
+        }
+
+        // --- handle arrays of datatypes: Sequence(MyObject) with raw being a Collection of Map -->
+        if (expectedType instanceof SequenceType seqType2 && raw instanceof Collection<?> rawCol) {
+            org.tzi.use.uml.ocl.type.Type elemType = seqType2.elemType();
+            if (elemType instanceof MDataType elementDt) {
+                List<Value> elements = new ArrayList<>();
+                for (Object item : rawCol) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> rawValues = (Map<String, Object>) itemMap;
+                        Map<String, Value> values = new LinkedHashMap<>();
+                        for (MAttribute a : elementDt.attributes()) {
+                            Object attrRaw = rawValues.get(a.name());
+                            values.put(a.name(), buildUseValue(a.type(), attrRaw));
+                        }
+                        elements.add(new DataTypeValueValue(elementDt, null, values));
+                    } else {
+                        // fallback: try to build element value normally
+                        elements.add(buildUseValue(elemType, item));
+                    }
+                }
+                return new SequenceValue(elemType, elements);
+            }
         }
 
         if (expectedType instanceof MDataType && raw instanceof Map) {

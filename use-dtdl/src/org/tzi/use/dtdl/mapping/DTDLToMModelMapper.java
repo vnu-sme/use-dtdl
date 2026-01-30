@@ -304,14 +304,13 @@ public class DTDLToMModelMapper {
             if (tn.contains("bool")) { schemaToTypeName.put(s,"Boolean"); return "Boolean"; }
             schemaToTypeName.put(s,"String"); return "String";
         }
-        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object) {
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object obj) {
             String dtName = sanitize(currentPath() + "_Object");
 
             if (api.getModel().getDataType(dtName) == null) api.createDataType(dtName, false);
 
             schemaToTypeName.put(s, dtName);
 
-            org.tzi.use.dtdl.DTDLModel.Schema.Object.Object obj = (org.tzi.use.dtdl.DTDLModel.Schema.Object.Object) s;
             MDataType dt = api.getModel().getDataType(dtName);
             if (dt == null) throw new UseApiException("Could not obtain created data type " + dtName);
 
@@ -333,20 +332,19 @@ public class DTDLToMModelMapper {
             pop();
             return dtName;
         }
+
         if (s instanceof Array) {
-            String name = sanitize(currentPath() + "_Array");
-            schemaToTypeName.put(s, name);
-
+            // for arrays map to an OCL Sequence type expression using the element type
             Schema elem = ((Array) s).getElementSchema();
-            String etn = mapSchemaToTypeName(elem);
-            String seqName = "Sequence<" + etn + ">";
+            String etn = mapSchemaToTypeName(elem); // ensure element type/dataType is created first
+            // Use parentheses syntax which USE/Type parser accepts.
+            String seqName = "Sequence(" + etn + ")";
 
-            if (api.getModel().getDataType(seqName) == null) api.createDataType(seqName, false);
             schemaToTypeName.put(s, seqName);
             return seqName;
         }
-        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum) {
-            org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum e = (org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum) s;
+
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum e) {
             String enumName = sanitize(currentPath() + "_Enum");
             schemaToTypeName.put(s, enumName);
 
@@ -361,30 +359,47 @@ public class DTDLToMModelMapper {
 
             return enumName;
         }
-        if (s instanceof org.tzi.use.dtdl.DTDLModel.NamedSchema) {
-            NamedSchema ns = (NamedSchema) s;
+        if (s instanceof NamedSchema ns) {
             String name = sanitize(ns.getName() != null ? ns.getName() : sanitize(currentPath() + "_Named"));
             schemaToTypeName.put(s, name);
 
             if (api.getModel().getDataType(name) == null) api.createDataType(name, false);
             return name;
         }
-        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Map.Map) {
-            org.tzi.use.dtdl.DTDLModel.Schema.Map.Map m = (org.tzi.use.dtdl.DTDLModel.Schema.Map.Map) s;
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Map.Map m) {
             Schema k = m.getMapKey() != null ? m.getMapKey().getSchema() : null;
             Schema v = m.getMapValue() != null ? m.getMapValue().getSchema() : null;
 
-            String name = sanitize(currentPath() + "_Map");
-            schemaToTypeName.put(s, name);
+            // create an entry datatype for map entries
+            String entryDtName = sanitize(currentPath() + "_MapEntry");
+            if (entryDtName == null || entryDtName.isEmpty()) entryDtName = "MapEntry";
 
-            MDataType dt = api.getModel().getDataType(name);
-            if (dt == null) api.createDataType(name, false);
+            if (api.getModel().getDataType(entryDtName) == null) {
+                api.createDataType(entryDtName, false);
+            }
+            MDataType entryDt = api.getModel().getDataType(entryDtName);
+            if (entryDt == null) throw new UseApiException("Could not obtain created data type " + entryDtName);
 
-            dt = api.getModel().getDataType(name);
-            if (k != null) addAttributeToDataType(dt, "key", api.getType(mapSchemaToTypeName(k)));
-            if (v != null) addAttributeToDataType(dt, "value", api.getType(mapSchemaToTypeName(v)));
-            return name;
+            if (k != null) {
+                String keyTypeName = mapSchemaToTypeName(k);
+                Type keyType = api.getType(keyTypeName);
+                boolean exists = entryDt.attributes().stream().anyMatch(a -> "key".equals(a.name()));
+                if (!exists) addAttributeToDataType(entryDt, "key", keyType);
+            }
+
+            if (v != null) {
+                String valueTypeName = mapSchemaToTypeName(v);
+                Type valueType = api.getType(valueTypeName);
+                boolean exists = entryDt.attributes().stream().anyMatch(a -> "value".equals(a.name()));
+                if (!exists) addAttributeToDataType(entryDt, "value", valueType);
+            }
+
+            // represent map as a sequence of entry datatypes
+            String seqName = "Sequence(" + entryDtName + ")";
+            schemaToTypeName.put(s, seqName);
+            return seqName;
         }
+
         schemaToTypeName.put(s, "String");
         return "String";
     }
