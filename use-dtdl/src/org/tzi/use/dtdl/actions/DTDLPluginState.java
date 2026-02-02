@@ -1,6 +1,5 @@
 package org.tzi.use.dtdl.actions;
 
-import org.tzi.use.dtdl.runtime.DTDLSystem;
 import org.tzi.use.dtdl.semantic.DTDLContext;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.dtdl.telemetry.TelemetryAdapter;
@@ -14,7 +13,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class DTDLPluginState {
     private static DTDLModelRegistry registry;
     private static DTDLContext ctx;
-    private static DTDLSystem system;
     private static TelemetryEngine telemetryEngine;
 
     // track adapters so they survive dialog close and can be detached later
@@ -34,13 +32,6 @@ public final class DTDLPluginState {
             ctx = new DTDLContext(registry());
         }
         return ctx;
-    }
-
-    public static synchronized DTDLSystem system() {
-        if (system == null) {
-            system = new DTDLSystem(registry(), context());
-        }
-        return system;
     }
 
     public static synchronized TelemetryEngine startTelemetryRuntime() {
