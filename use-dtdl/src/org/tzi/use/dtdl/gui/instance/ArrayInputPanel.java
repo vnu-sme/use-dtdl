@@ -73,10 +73,9 @@ public class ArrayInputPanel extends JPanel implements ValueProvider {
         List<Object> out = new ArrayList<>();
         for (JComponent c : itemInputs) {
             Object raw = adapter.extractValueFromInput(c);
-            Object coerced = SchemaInputFactory.tryCoerceToSchema(raw, elementSchema);
-            // raw present but cannot coerce => validation error sentinel
-            if (raw != null && coerced == null) return InputValidation.INVALID;
-            if (coerced != null) out.add(coerced);
+            // If inner input panel signals INVALID, propagate
+            if (raw == InputValidation.INVALID) return InputValidation.INVALID;
+            if (raw != null) out.add(raw);
         }
         return out.isEmpty() ? null : out;
     }

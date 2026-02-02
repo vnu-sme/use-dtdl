@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.tzi.use.dtdl.gui.instance.SchemaInputFactory.resolveNamedSchema;
-import static org.tzi.use.dtdl.gui.instance.SchemaInputFactory.tryCoerceToSchema;
+import static org.tzi.use.dtdl.util.SchemaUtils.coerceToSchemaRecursive;
 
 public class CreateInstanceDialog extends JDialog {
     private final Session session;
@@ -432,6 +432,24 @@ public class CreateInstanceDialog extends JDialog {
         }
 
         try {
+            // AUTHORITATIVE COERCION STEP: validate & coerce all collected properties
+            Map<String, Object> coercedForCreate = new LinkedHashMap<>();
+            List<Property> propDefs = iface.getContents().stream().filter(c -> c instanceof Property).map(c -> (Property)c).collect(Collectors.toList());
+            for (Property p : propDefs) {
+                String key = p.getName();
+                Object raw = collected.get(key);
+                Schema sch = resolveNamedSchema(p.getSchema(), iface);
+                Object coerced = coerceToSchemaRecursive(sch, raw);
+                if (raw != null && coerced == null) {
+                    JOptionPane.showMessageDialog(this,
+                            "Invalid value for property " + key,
+                            "Validation error",
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                if (coerced != null) coercedForCreate.put(key, coerced);
+            }
+
             useService.ensureSystemExists();
 
             UseSystemApi sysApi = UseSystemApi.create(session);
@@ -446,7 +464,7 @@ public class CreateInstanceDialog extends JDialog {
             MObject obj = sysApi.createObject(className, name);
             String createdName = obj.name();
 
-            for (Map.Entry<String, Object> en : collected.entrySet()) {
+            for (Map.Entry<String, Object> en : coercedForCreate.entrySet()) {
                 String attr = en.getKey();
                 Object val = en.getValue();
                 MClass cls = session.system().model().getClass(obj.cls().name());
