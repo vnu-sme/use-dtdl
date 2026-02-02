@@ -2,16 +2,16 @@ package org.tzi.use.dtdl.gui.telemetry;
 
 import org.tzi.use.dtdl.actions.DTDLPluginState;
 import org.tzi.use.dtdl.telemetry.HttpPollingAdapter;
-import org.tzi.use.dtdl.telemetry.TelemetryEngine;
+import org.tzi.use.dtdl.telemetry.TelemetryAdapter;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.time.Instant;
-import java.util.*;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Swing dialog to register remote APIs that mimic devices and start polling them.
@@ -23,10 +23,6 @@ public class ApiRegistrationDialog extends JDialog {
     private final DefaultListModel<String> listModel = new DefaultListModel<>();
     private final JList<String> adapterList = new JList<>(listModel);
 
-    // keep created adapters here for management
-    private final Map<String, HttpPollingAdapter> adapters = new LinkedHashMap<>();
-
-    // input fields
     private final JTextField urlField = new JTextField();
     private final JTextField intervalField = new JTextField("2000");
     private final JTextField dtmiField = new JTextField();
@@ -104,8 +100,8 @@ public class ApiRegistrationDialog extends JDialog {
         // on close: detach adapters
         addWindowListener(new WindowAdapter() {
             @Override
-            public void windowClosing(WindowEvent e) {
-                // nothing automatic — adapters remain attached until removed explicitly
+            public void windowOpened(WindowEvent e) {
+                reloadAdapterList();
             }
         });
     }
@@ -124,18 +120,13 @@ public class ApiRegistrationDialog extends JDialog {
         String id = "api-" + UUID.randomUUID().toString().substring(0,8);
         HttpPollingAdapter adapter = new HttpPollingAdapter(id, url, interval, dtmi, tele, dev, obj, path);
 
-        // attach to engine
-        TelemetryEngine engine = DTDLPluginState.telemetryEngine();
-        engine.attachAdapter(adapter);
-        engine.start(); // ensure engine running
-
-        adapters.put(id, adapter);
-        listModel.addElement(renderAdapterLine(adapter));
-
-        // optional: post an immediate manual fetch (adapter schedules immediate run)
-        // adapter.start was called by attachAdapter -> it begins polling immediately
-
-        JOptionPane.showMessageDialog(this, "Adapter started: " + id);
+        try {
+            DTDLPluginState.registerAndAttachAdapter(adapter);
+            listModel.addElement(renderAdapterLine(adapter));
+            JOptionPane.showMessageDialog(this, "Adapter started: " + id);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Failed to attach adapter:\n" + ex.getMessage());
+        }
     }
 
     private void onStopSelected() {
@@ -143,26 +134,20 @@ public class ApiRegistrationDialog extends JDialog {
         if (sel.isEmpty()) { JOptionPane.showMessageDialog(this, "Select one or more adapters to stop"); return; }
         for (String line : sel) {
             String id = parseIdFromLine(line);
-            HttpPollingAdapter a = adapters.get(id);
-            if (a != null) {
-                a.close(); // stops polling
-                // also detach from engine
-                DTDLPluginState.telemetryEngine().detachAdapter(id);
-                listModel.removeElement(line);
-                adapters.remove(id);
-            }
+            DTDLPluginState.detachAndUnregisterAdapter(id);
+            listModel.removeElement(line);
         }
     }
 
     private void onRemoveSelected() {
-        // same as stop for now
         onStopSelected();
     }
 
     private String blankToNull(String s) { if (s == null) return null; s = s.trim(); return s.isEmpty() ? null : s; }
 
-    private String renderAdapterLine(HttpPollingAdapter a) {
-        return a.id() + " | " + a.url() + " | int=" + a.intervalMs() + "ms | dtmi=" + (a.dtmi() == null ? "<any>" : a.dtmi()) + " | tele=" + (a.telemetryName() == null ? "<any>" : a.telemetryName());
+    private String renderAdapterLine(TelemetryAdapter a) {
+        return a.id() + " | " + a.getClass().getSimpleName() + " | url=" + (a instanceof HttpPollingAdapter ? ((HttpPollingAdapter)a).url() : "<n/a>")
+                + " | tele=" + (a instanceof HttpPollingAdapter ? (((HttpPollingAdapter)a).telemetryName() == null ? "<any>" : ((HttpPollingAdapter)a).telemetryName()) : "<any>");
     }
 
     private String parseIdFromLine(String line) {
@@ -170,6 +155,14 @@ public class ApiRegistrationDialog extends JDialog {
         int sp = line.indexOf(' ');
         if (sp < 0) return line;
         return line.substring(0, sp);
+    }
+
+    private void reloadAdapterList() {
+        listModel.clear();
+        Map<String, ? extends TelemetryAdapter> regs = DTDLPluginState.getRegisteredAdapters();
+        for (TelemetryAdapter a : regs.values()) {
+            listModel.addElement(renderAdapterLine(a));
+        }
     }
 
     public static void showDialog(Component parent) {
