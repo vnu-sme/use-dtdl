@@ -2,6 +2,7 @@ package org.tzi.use.dtdl.actions;
 
 import org.tzi.use.dtdl.gui.telemetry.ApiRegistrationDialog;
 import org.tzi.use.dtdl.telemetry.TelemetryEngine;
+import org.tzi.use.main.Session;
 import org.tzi.use.runtime.gui.IPluginAction;
 import org.tzi.use.runtime.gui.IPluginActionDelegate;
 import org.tzi.use.gui.main.MainWindow;
@@ -21,7 +22,8 @@ public final class StartTelemetryRuntimeAction implements IPluginActionDelegate 
             TelemetryEngine engine = DTDLPluginState.startTelemetryRuntime();
 
             // open the dialog (modal) so user can add/register HTTP adapters
-            ApiRegistrationDialog.showDialog(mainWindow);
+            Session s = action.getSession();
+            ApiRegistrationDialog.showDialog(mainWindow, s);
 
         } catch (Exception e) {
             e.printStackTrace();

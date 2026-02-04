@@ -30,8 +30,7 @@
       "fields": [
         { "name": "temperature", "schema": "double" },
         { "name": "humidity", "schema": "double" },
-        { "name": "co2", "schema": "double" },
-        { "name": "noiseLevel", "schema": "double" }
+        { "name": "windSpeed", "schema": "double" }
       ]
     },
     {

@@ -12,4 +12,10 @@ public final class Utils {
         if (Character.isDigit(s.charAt(0))) s = "_" + s;
         return s;
     }
+
+    public static String blankToNull(String s) {
+        if (s == null) return null;
+        s = s.trim();
+        return s.isEmpty() ? null : s;
+    }
 }

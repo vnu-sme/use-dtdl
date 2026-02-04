@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -17,14 +18,32 @@ public final class BindingRegistry {
         public final String adapterId; // adapter identifier
         public final String objectName; // optional explicit object target
 
+        // For primitive telemetry mapping: map entire telemetry to a single JSON path (e.g. "current.temperature_2m")
+        public final String valuePath;
+
+        // For object telemetry mapping: map fieldName -> JSON path (e.g. "temperature" -> "current.temperature_2m")
+        public final Map<String, String> fieldPaths;
 
         public Binding(String dtmi, String telemetryName, String adapterId, String objectName) {
+            this(dtmi, telemetryName, adapterId, objectName, null, null);
+        }
+
+        public Binding(String dtmi, String telemetryName, String adapterId, String objectName, String valuePath) {
+            this(dtmi, telemetryName, adapterId, objectName, valuePath, null);
+        }
+
+        public Binding(String dtmi, String telemetryName, String adapterId, String objectName, Map<String, String> fieldPaths) {
+            this(dtmi, telemetryName, adapterId, objectName, null, fieldPaths);
+        }
+
+        public Binding(String dtmi, String telemetryName, String adapterId, String objectName, String valuePath, Map<String,String> fieldPaths) {
             this.dtmi = dtmi;
             this.telemetryName = telemetryName;
             this.adapterId = adapterId;
             this.objectName = objectName;
+            this.valuePath = valuePath;
+            this.fieldPaths = fieldPaths == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(fieldPaths));
         }
-
 
         public boolean matches(String dtmi, String telemetryName, String adapterId) {
             if (this.adapterId != null && adapterId != null && !this.adapterId.equals(adapterId)) return false;
@@ -33,13 +52,19 @@ public final class BindingRegistry {
             return true;
         }
 
-
         @Override
-        public String toString() { return "Binding{" + dtmi + ":" + telemetryName + " -> " + objectName + " via " + adapterId + '}'; }
+        public String toString() {
+            return "Binding{" + dtmi + ":" + telemetryName +
+                    " -> " + objectName +
+                    " via " + adapterId +
+                    (valuePath != null ? (" valuePath=" + valuePath) : "") +
+                    (fieldPaths != null ? (" fieldPaths=" + fieldPaths) : "") +
+                    '}';
+        }
     }
 
 
-    private final Map<String, Binding> bindings = new LinkedHashMap<>();
+    private final Map<String, Binding> bindings = new ConcurrentHashMap<>();
 
 
     public BindingRegistry() {}

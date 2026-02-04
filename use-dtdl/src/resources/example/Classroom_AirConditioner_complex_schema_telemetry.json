@@ -1,0 +1,45 @@
+{
+  "@context": "dtmi:dtdl:context;4",
+  "@id": "dtmi:com:example:AirConditioner;1",
+  "@type": "Interface",
+  "displayName": "Air Conditioner",
+  "description": "Smart air conditioning unit for climate control.",
+  "schemas": [
+    {
+      "@id": "dtmi:com:example:schemas:EnvironmentState;1",
+      "@type": "Object",
+      "fields": [
+        { "name": "temperature", "schema": "double" },
+        { "name": "humidity", "schema": "double" },
+        { "name": "windSpeed", "schema": "double" }
+      ]
+    }
+  ],
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "onOff",
+      "schema": "boolean",
+      "description": "Indicates whether the air conditioner is powered on."
+    },
+    {
+      "@type": "Property",
+      "name": "fanSpeed",
+      "schema": {
+        "@type": "Enum",
+        "valueSchema": "string",
+        "enumValues": [
+          { "name": "low", "enumValue": "low" },
+          { "name": "medium", "enumValue": "medium" },
+          { "name": "high", "enumValue": "high" }
+        ]
+      }
+    },
+    {
+      "@type": "Telemetry",
+      "name": "environmentState",
+      "description": "Aggregated environmental metrics.",
+      "schema": "dtmi:com:example:schemas:EnvironmentState;1"
+    }
+  ]
+}

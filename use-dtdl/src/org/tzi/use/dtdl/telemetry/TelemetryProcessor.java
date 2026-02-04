@@ -1,29 +1,30 @@
 package org.tzi.use.dtdl.telemetry;
 
-
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
 import org.tzi.use.dtdl.DTDLModel.DTDLModel;
 import org.tzi.use.dtdl.DTDLModel.Interface;
+import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
 import org.tzi.use.dtdl.DTDLModel.Schema.PrimitiveType;
 import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
+import org.tzi.use.dtdl.DTDLModel.Schema.Object.Field;
+import org.tzi.use.dtdl.DTDLModel.Schema.Map.MapKey;
+import org.tzi.use.dtdl.DTDLModel.Schema.Map.MapValue;
+import org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum;
+import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumValue;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.dtdl.actions.DTDLPluginState;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.tzi.use.dtdl.util.JacksonPath;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.Optional;
 
-
-
-/**
- * TelemetryProcessor: resolve DTMI -> interface, find telemetry definition and validate the value.
- * Produces TelemetryFact instances that are descriptive only (no state mutation).
- */
 public final class TelemetryProcessor {
     private final BindingRegistry bindings;
-
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public TelemetryProcessor(BindingRegistry bindings) {
         this.bindings = bindings;
@@ -32,146 +33,310 @@ public final class TelemetryProcessor {
 
     public TelemetryFact process(TelemetryEvent ev) {
         if (ev == null) throw new IllegalArgumentException("event required");
+
         DTDLModelRegistry reg = DTDLPluginState.registry();
-        System.err.println("[PROCESSOR] Processing telemetry: dtmi=" + ev.dtmi +
-                " name=" + ev.telemetryName +
-                " raw=" + ev.rawValue);
-
-        if (reg == null) {
-            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.UNKNOWN_INTERFACE, ev.dtmi, null, ev.telemetryName, null, ev.timestamp, ev.source, null, ev.meta);
-            f.addDiag("DTDLModelRegistry not available (no registry loaded)");
+        if (reg == null || reg.getCanonicalModel() == null) {
+            TelemetryFact f = new TelemetryFact(
+                    TelemetryFact.Status.UNKNOWN_INTERFACE,
+                    ev.dtmi, null, ev.telemetryName,
+                    null, ev.timestamp, ev.source,
+                    ev.objectName, ev.meta
+            );
+            f.addDiag("DTDL model not available");
             return f;
         }
-
-
-        String dtmi = ev.dtmi;
-        if (dtmi == null || dtmi.isEmpty()) {
-            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.UNKNOWN_INTERFACE, null, null, ev.telemetryName, null, ev.timestamp, ev.source, null, ev.meta);
-            f.addDiag("Event missing dtmi");
-            return f;
-        }
-
 
         DTDLModel model = reg.getCanonicalModel();
-        if (model == null) {
-            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.UNKNOWN_INTERFACE, dtmi, null, ev.telemetryName, null, ev.timestamp, ev.source, null, ev.meta);
-            f.addDiag("Canonical DTDL model is empty");
-            return f;
+
+        Optional<BindingRegistry.Binding> bindingOpt = bindings.find(ev.dtmi, ev.telemetryName, ev.source);
+
+        // Determine telemetry name to use for lookups: prefer event name, but fall back to binding.telemetryName
+        String telemetryNameForLookup = ev.telemetryName;
+        if ((telemetryNameForLookup == null || telemetryNameForLookup.isBlank()) && bindingOpt.isPresent()) {
+            BindingRegistry.Binding bb = bindingOpt.get();
+            if (bb.telemetryName != null && !bb.telemetryName.isBlank()) telemetryNameForLookup = bb.telemetryName;
         }
 
+        // Try to locate an interface (DTMI). If event provided dtmi use it; otherwise try to find an interface that contains the telemetry
+        String resolvedDtmi = ev.dtmi;
+        Interface iface = null;
 
-        Interface iface = model.getInterface(dtmi);
-        if (iface == null) {
-            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.UNKNOWN_INTERFACE, dtmi, null, ev.telemetryName, null, ev.timestamp, ev.source, null, ev.meta);
-            f.addDiag("No interface found for dtmi: " + dtmi);
-            return f;
-        }
-
-        // find matching content element by name (telemetry name)
-        Object matchedContent = null;
-        for (Object ce : iface.getContents()) {
-            try {
-                Method m = ce.getClass().getMethod("getName");
-                Object name = m.invoke(ce);
-                if (name != null && name.toString().equals(ev.telemetryName)) { matchedContent = ce; break; }
-            } catch (NoSuchMethodException nm) {
-                // ignore
-            } catch (Throwable t) {
-                // reflection problem
+        if (resolvedDtmi != null && !resolvedDtmi.isBlank()) {
+            iface = model.getInterface(resolvedDtmi);
+            if (iface == null) {
+                System.err.println("[PROCESSOR] Provided dtmi not found in canonical model: " + resolvedDtmi);
             }
         }
 
-        if (matchedContent == null) {
-            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.UNBOUND, dtmi, iface.getId(), ev.telemetryName, null, ev.timestamp, ev.source, ev.objectName, ev.meta);
-            f.addDiag("No content element found matching telemetry name: " + ev.telemetryName);
+        if (iface == null && telemetryNameForLookup != null) {
+            for (Interface cand : model.getInterfaces().values()) {
+                for (ContentElement ce : cand.getContents()) {
+                    if (telemetryNameForLookup.equals(ce.getName())) {
+                        iface = cand;
+                        resolvedDtmi = cand.getId();
+                        break;
+                    }
+                }
+                if (iface != null) break;
+            }
+        }
+
+        // final attempt: if binding explicitly specifies a dtmi, use it
+        if (iface == null && bindingOpt.isPresent()) {
+            BindingRegistry.Binding bb = bindingOpt.get();
+            if (bb.dtmi != null && !bb.dtmi.isBlank()) {
+                iface = model.getInterface(bb.dtmi);
+                if (iface != null) {
+                    resolvedDtmi = bb.dtmi;
+                    System.err.println("[PROCESSOR] Using binding.dtmi=" + bb.dtmi + " to resolve interface");
+                }
+            }
+        }
+
+        // If we still have no interface and there's no binding, we can't proceed
+        if (iface == null && bindingOpt.isEmpty()) {
+            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.UNKNOWN_INTERFACE, ev.dtmi, null, ev.telemetryName, null, ev.timestamp, ev.source, null, ev.meta);
+            f.addDiag("No interface found and no binding available (dtmi=" + ev.dtmi + ", tele=" + ev.telemetryName + ")");
             return f;
         }
 
-        // attempt to obtain schema via getSchema()
+        // find matching content element by name (telemetry name) if possible
+        ContentElement  matchedContent = null;
+        if (telemetryNameForLookup != null) {
+            for (ContentElement ce : iface.getContents()) {
+                if (telemetryNameForLookup.equals(ce.getName())) {
+                    matchedContent = ce;
+                    break;
+                }
+            }
+        }
+
+        // attempt to obtain schema via getSchema() if we have matched content
         Schema schema = null;
-        try {
-            Method getSchema = matchedContent.getClass().getMethod("getSchema");
-            Object s = getSchema.invoke(matchedContent);
-            if (s instanceof Schema) schema = (Schema) s;
-        } catch (NoSuchMethodException ns) {
-            // content element does not expose schema
-        } catch (Throwable t) {
-            // ignore
+        if (matchedContent instanceof org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry t) {
+            schema = t.getSchema();
+        } else if (matchedContent instanceof org.tzi.use.dtdl.DTDLModel.Property.Property p) {
+            schema = p.getSchema();
+        } else if (matchedContent instanceof org.tzi.use.dtdl.DTDLModel.Command.Command c) {
+            if (c.getRequest() != null) schema = c.getRequest().getSchema();
         }
 
 
-        // validate / coerce raw value against schema (basic primitive support)
+        // Processing/coercion: either use binding if present (valuePath or fieldPaths), otherwise default behaviour
         Object normalized = null;
         boolean valid = true;
-        if (schema instanceof PrimitiveType) {
-            String tname = ((PrimitiveType) schema).getTypeName();
-            var r = tryCoercePrimitive(ev.rawValue, tname);
-            normalized = r.value;
-            valid = r.ok;
-        } else {
-            // non-primitive: best-effort pass-through
-            normalized = ev.rawValue;
+
+        try {
+            if (bindingOpt.isPresent()) {
+                BindingRegistry.Binding b = bindingOpt.get();
+                // If telemetry name is missing on event but binding specified a telemetryName and matchedContent is null, we tried to infer iface earlier.
+                // Apply binding extraction first if configured.
+                if (b.valuePath != null) {
+                    Object extracted = JacksonPath.extract(
+                            ev.rawValue instanceof String ? (String) ev.rawValue : String.valueOf(ev.rawValue),
+                            b.valuePath
+                    );
+                    System.err.println("[PROCESSOR] Binding valuePath extracted: " + extracted + " for path=" + b.valuePath);
+                    if (schema != null && schema instanceof PrimitiveType) {
+                        var r = tryCoercePrimitive(extracted, ((PrimitiveType) schema).getTypeName());
+                        normalized = r.value;
+                        valid = r.ok;
+                    } else {
+                        var r = coerceAgainstSchema(schema, extracted);
+                        normalized = r.value;
+                        valid = r.ok;
+                    }
+                } else if (b.fieldPaths != null) {
+                    Map<String, Object> assembled = new LinkedHashMap<>();
+                    for (Map.Entry<String, String> en : b.fieldPaths.entrySet()) {
+                        String fname = en.getKey();
+                        String path = en.getValue();
+                        if (path == null || path.isBlank()) {
+                            assembled.put(fname, null);
+                        } else {
+                            Object extracted = JacksonPath.extract(
+                                    ev.rawValue instanceof String ? (String) ev.rawValue : String.valueOf(ev.rawValue),
+                                    path
+                            );
+                            assembled.put(fname, extracted);
+                            System.err.println("[PROCESSOR] Binding field extracted: field=" + fname + " path=" + path + " value=" + extracted);
+                        }
+                    }
+                    // coerce assembled map against schema if available
+                    var r = coerceAgainstSchema(schema, assembled);
+                    normalized = r.value;
+                    valid = r.ok;
+                } else {
+                    // binding present but no specific paths -> fall back to default behaviour (coerce ev.rawValue)
+                    if (schema instanceof PrimitiveType) {
+                        var r = tryCoercePrimitive(ev.rawValue, ((PrimitiveType) schema).getTypeName());
+                        normalized = r.value;
+                        valid = r.ok;
+                    } else {
+                        var r = coerceAgainstSchema(schema, ev.rawValue);
+                        normalized = r.value;
+                        valid = r.ok;
+                    }
+                }
+            } else {
+                // no binding: original behavior (coerce using schema if present)
+                if (schema instanceof PrimitiveType) {
+                    var r = tryCoercePrimitive(ev.rawValue, ((PrimitiveType) schema).getTypeName());
+                    normalized = r.value;
+                    valid = r.ok;
+                } else {
+                    var r = coerceAgainstSchema(schema, ev.rawValue);
+                    normalized = r.value;
+                    valid = r.ok;
+                }
+            }
+        } catch (Throwable t) {
+            System.err.println("[PROCESSOR] extraction/coercion failed: " + t.getMessage());
+            t.printStackTrace(System.err);
+            valid = false;
+            normalized = null;
         }
 
-
         if (!valid) {
-            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.INVALID, dtmi, iface.getId(), ev.telemetryName, null, ev.timestamp, ev.source, ev.objectName, ev.meta);
+            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.INVALID, resolvedDtmi, iface == null ? null : iface.getId(), telemetryNameForLookup, null, ev.timestamp, ev.source, ev.objectName, ev.meta);
             f.addDiag("Failed to coerce value '" + ev.rawValue + "' to schema " + (schema == null ? "<unknown>" : schema.getClass().getSimpleName()));
+            bindingOpt.ifPresent(bb -> f.addDiag("Binding present: " + bb.toString()));
             return f;
         }
 
+        String matchedObject = bindingOpt.map(bb -> bb.objectName).orElse(ev.objectName);
 
-        // find binding optionally
-        Optional<BindingRegistry.Binding> b = bindings.find(dtmi, ev.telemetryName, ev.source);
-        String matchedObject = b.map(bb -> bb.objectName).orElse(ev.objectName);
-
-
-        TelemetryFact f = new TelemetryFact(TelemetryFact.Status.RESOLVED, dtmi, iface.getId(), ev.telemetryName, normalized, ev.timestamp, ev.source, matchedObject, ev.meta);
-        f.addDiag("Matched interface and telemetry element");
-        b.ifPresent(bb -> f.addDiag("Applied binding: " + bb.toString()));
+        TelemetryFact f = new TelemetryFact(TelemetryFact.Status.RESOLVED, resolvedDtmi, iface == null ? null : iface.getId(), telemetryNameForLookup, normalized, ev.timestamp, ev.source, matchedObject, ev.meta);
+        f.addDiag("Matched interface and telemetry element (or applied binding)");
+        bindingOpt.ifPresent(bb -> f.addDiag("Applied binding: " + bb.toString()));
         return f;
     }
+
 
     private static class CoerceResult {
         final boolean ok;
         final Object value;
-
-        CoerceResult(boolean ok, Object value) {
-            this.ok = ok;
-            this.value = value;
-        }
+        CoerceResult(boolean ok, Object value) { this.ok = ok; this.value = value; }
     }
-
 
     private static CoerceResult tryCoercePrimitive(Object raw, String tname) {
         if (raw == null) return new CoerceResult(true, null);
         if (tname == null) tname = "string";
         tname = tname.toLowerCase();
         try {
-            if (tname.contains("int") || tname.equals("integer") || tname.equals("long")) {
-                if (raw instanceof Number) return new CoerceResult(true, ((Number) raw).intValue());
-                if (raw instanceof String) return new CoerceResult(true, Integer.parseInt(((String) raw).trim()));
-                return new CoerceResult(false, null);
-            }
-            if (tname.contains("float") || tname.contains("double") || tname.equals("number") || tname.equals("real")) {
-                if (raw instanceof Number) return new CoerceResult(true, ((Number) raw).doubleValue());
-                if (raw instanceof String) return new CoerceResult(true, Double.parseDouble(((String) raw).trim()));
-                return new CoerceResult(false, null);
-            }
-            if (tname.contains("bool")) {
-                if (raw instanceof Boolean) return new CoerceResult(true, raw);
-                if (raw instanceof String) {
-                    String s = ((String) raw).trim();
+            if (raw instanceof String) {
+                String s = ((String) raw).trim();
+                if (tname.contains("int") || tname.equals("integer") || tname.equals("long")) return new CoerceResult(true, Integer.parseInt(s));
+                if (tname.contains("float") || tname.contains("double") || tname.equals("number") || tname.equals("real")) return new CoerceResult(true, Double.parseDouble(s));
+                if (tname.contains("bool")) {
                     if ("true".equalsIgnoreCase(s)) return new CoerceResult(true, Boolean.TRUE);
                     if ("false".equalsIgnoreCase(s)) return new CoerceResult(true, Boolean.FALSE);
                     return new CoerceResult(false, null);
                 }
+                return new CoerceResult(true, s);
+            }
+            if (tname.contains("int") || tname.equals("integer") || tname.equals("long")) {
+                if (raw instanceof Number) return new CoerceResult(true, ((Number) raw).intValue());
                 return new CoerceResult(false, null);
             }
-            // default to string
+            if (tname.contains("float") || tname.contains("double") || tname.equals("number") || tname.equals("real")) {
+                if (raw instanceof Number) return new CoerceResult(true, ((Number) raw).doubleValue());
+                return new CoerceResult(false, null);
+            }
+            if (tname.contains("bool")) {
+                if (raw instanceof Boolean) return new CoerceResult(true, raw);
+                return new CoerceResult(false, null);
+            }
             return new CoerceResult(true, String.valueOf(raw));
         } catch (Exception ex) {
             return new CoerceResult(false, null);
         }
+    }
+
+    private static CoerceResult coerceAgainstSchema(Schema schema, Object raw) {
+        if (schema == null) return new CoerceResult(true, raw);
+        Object parsed = raw;
+        try {
+            if (raw instanceof String) {
+                String s = ((String) raw).trim();
+                if (s.startsWith("{") || s.startsWith("[")) {
+                    parsed = MAPPER.readValue(s, Object.class);
+                }
+            }
+        } catch (Exception e) {
+            return new CoerceResult(false, null);
+        }
+
+        if (schema instanceof PrimitiveType) {
+            return tryCoercePrimitive(parsed, ((PrimitiveType) schema).getTypeName());
+        }
+
+        if (schema instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object objSchema) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            Map<?,?> srcMap = parsed instanceof Map ? (Map<?,?>) parsed : null;
+            for (Field f : objSchema.getFields()) {
+                String name = f.getName();
+                Schema fs = f.getSchema();
+                Object v = (srcMap != null) ? srcMap.get(name) : null;
+                CoerceResult cr = coerceAgainstSchema(fs, v);
+                if (!cr.ok) return new CoerceResult(false, null);
+                out.put(name, cr.value);
+            }
+            return new CoerceResult(true, out);
+        }
+
+        if (schema instanceof Array) {
+            Array arrSchema = (Array) schema;
+            Schema elemSchema = arrSchema.getElementSchema();
+            List<?> srcList = parsed instanceof List ? (List<?>) parsed : null;
+            if (srcList == null) return new CoerceResult(false, null);
+            List<Object> out = new ArrayList<>(srcList.size());
+            for (Object e : srcList) {
+                CoerceResult cr = coerceAgainstSchema(elemSchema, e);
+                if (!cr.ok) return new CoerceResult(false, null);
+                out.add(cr.value);
+            }
+            return new CoerceResult(true, out);
+        }
+
+        if (schema instanceof org.tzi.use.dtdl.DTDLModel.Schema.Map.Map m) {
+            MapKey keySchema = m.getMapKey();
+            MapValue valSchema = m.getMapValue();
+            Map<?,?> srcMap = parsed instanceof Map ? (Map<?,?>) parsed : null;
+            if (srcMap == null) return new CoerceResult(false, null);
+            Map<Object,Object> out = new LinkedHashMap<>();
+            for (Map.Entry<?,?> en : srcMap.entrySet()) {
+                Object rawK = en.getKey();
+                Object rawV = en.getValue();
+                CoerceResult ck = coerceAgainstSchema(keySchema == null ? null : (Schema) keySchema.getSchema(), rawK);
+                if (!ck.ok) return new CoerceResult(false, null);
+                CoerceResult cv = coerceAgainstSchema(valSchema == null ? null : (Schema) valSchema.getSchema(), rawV);
+                if (!cv.ok) return new CoerceResult(false, null);
+                out.put(ck.value, cv.value);
+            }
+            return new CoerceResult(true, out);
+        }
+
+        if (schema instanceof Enum es) {
+            List<EnumValue> vals = es.getValues();
+            if (vals == null || vals.isEmpty()) return new CoerceResult(false, null);
+            for (EnumValue ev : vals) {
+                if (ev == null) continue;
+                try {
+                    Method getValue = ev.getClass().getMethod("getValue");
+                    Object lit = getValue.invoke(ev);
+                    if (lit == null) continue;
+                    if (Objects.equals(lit.toString(), parsed == null ? null : parsed.toString())) return new CoerceResult(true, parsed);
+                    if (lit instanceof Number && parsed instanceof Number) {
+                        double a = ((Number) lit).doubleValue();
+                        double b = ((Number) parsed).doubleValue();
+                        if (Double.compare(a,b) == 0) return new CoerceResult(true, parsed);
+                    }
+                } catch (Throwable ignore) {}
+            }
+            return new CoerceResult(false, null);
+        }
+
+        return new CoerceResult(true, parsed);
     }
 }
