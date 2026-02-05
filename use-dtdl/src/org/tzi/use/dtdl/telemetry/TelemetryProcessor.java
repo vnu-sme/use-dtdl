@@ -4,6 +4,7 @@ import org.tzi.use.dtdl.DTDLModel.ContentElement;
 import org.tzi.use.dtdl.DTDLModel.DTDLModel;
 import org.tzi.use.dtdl.DTDLModel.Interface;
 import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
+import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumLiteral;
 import org.tzi.use.dtdl.DTDLModel.Schema.PrimitiveType;
 import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
 import org.tzi.use.dtdl.DTDLModel.Schema.Object.Field;
@@ -147,25 +148,97 @@ public final class TelemetryProcessor {
                         valid = r.ok;
                     }
                 } else if (b.fieldPaths != null) {
-                    Map<String, Object> assembled = new LinkedHashMap<>();
-                    for (Map.Entry<String, String> en : b.fieldPaths.entrySet()) {
-                        String fname = en.getKey();
-                        String path = en.getValue();
-                        if (path == null || path.isBlank()) {
-                            assembled.put(fname, null);
-                        } else {
-                            Object extracted = JacksonPath.extract(
-                                    ev.rawValue instanceof String ? (String) ev.rawValue : String.valueOf(ev.rawValue),
-                                    path
-                            );
-                            assembled.put(fname, extracted);
-                            System.err.println("[PROCESSOR] Binding field extracted: field=" + fname + " path=" + path + " value=" + extracted);
+                    System.err.println(
+                            "[PROCESSOR] Using fieldPaths binding for telemetry='" + b.telemetryName + "'"
+                    );
+                    try {
+                        // parse incoming raw (if it's JSON text parse into objects)
+                        Object parsedRaw = ev.rawValue;
+                        if (parsedRaw instanceof String) {
+                            String s = ((String) parsedRaw).trim();
+                            if (s.startsWith("{") || s.startsWith("[")) {
+                                parsedRaw = MAPPER.readValue(s, Object.class);
+                            }
                         }
+
+                        System.err.println(
+                                "[PROCESSOR] Parsed raw value type = " +
+                                        (parsedRaw == null ? "null" : parsedRaw.getClass().getName())
+                        );
+
+                        // If the parsed raw value is a list -> assemble one map per element
+                        if (parsedRaw instanceof List) {
+                            System.err.println(
+                                    "[PROCESSOR] Detected ARRAY input (" + ((List<?>) parsedRaw).size() + " elements)"
+                            );
+                            List<?> rawList = (List<?>) parsedRaw;
+                            List<Object> assembledList = new ArrayList<>(rawList.size());
+
+                            for (Object elem : rawList) {
+                                System.err.println(
+                                        "[PROCESSOR] Assembling array element index=" + assembledList.size()
+                                );
+                                Map<String, Object> assembledElem = new LinkedHashMap<>();
+                                String elemJson;
+                                try {
+                                    // ensure we have JSON text for JacksonPath.extract
+                                    elemJson = (elem instanceof String) ? (String) elem : MAPPER.writeValueAsString(elem);
+                                } catch (Exception ex) {
+                                    // fallback: toString if serialization fails
+                                    elemJson = String.valueOf(elem);
+                                }
+
+                                for (Map.Entry<String, String> en : b.fieldPaths.entrySet()) {
+                                    String fname = en.getKey();
+                                    String path = en.getValue();
+                                    if (path == null || path.isBlank()) {
+                                        assembledElem.put(fname, null);
+                                    } else {
+                                        Object extracted = JacksonPath.extract(elemJson, path);
+                                        assembledElem.put(fname, extracted);
+                                        System.err.println("[PROCESSOR] Binding field (array element) extracted: field=" + fname + " path=" + path + " value=" + extracted);
+                                    }
+                                }
+                                assembledList.add(assembledElem);
+                            }
+
+                            // coerce assembled list (should match array-of-object schema)
+                            var r = coerceAgainstSchema(schema, assembledList);
+                            normalized = r.value;
+                            valid = r.ok;
+                        } else {
+                            System.err.println("[PROCESSOR] Detected OBJECT input (single element)");
+                            // assemble a single map
+                            Map<String, Object> assembled = new LinkedHashMap<>();
+                            String baseJson;
+                            try {
+                                baseJson = (parsedRaw instanceof String) ? (String) parsedRaw : MAPPER.writeValueAsString(parsedRaw);
+                            } catch (Exception ex) {
+                                baseJson = String.valueOf(parsedRaw);
+                            }
+
+                            for (Map.Entry<String, String> en : b.fieldPaths.entrySet()) {
+                                String fname = en.getKey();
+                                String path = en.getValue();
+                                if (path == null || path.isBlank()) {
+                                    assembled.put(fname, null);
+                                } else {
+                                    Object extracted = JacksonPath.extract(baseJson, path);
+                                    assembled.put(fname, extracted);
+                                    System.err.println("[PROCESSOR] Binding field extracted: field=" + fname + " path=" + path + " value=" + extracted);
+                                }
+                            }
+
+                            var r = coerceAgainstSchema(schema, assembled);
+                            normalized = r.value;
+                            valid = r.ok;
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("[PROCESSOR] binding fieldPaths extraction failed: " + ex.getMessage());
+                        ex.printStackTrace(System.err);
+                        valid = false;
+                        normalized = null;
                     }
-                    // coerce assembled map against schema if available
-                    var r = coerceAgainstSchema(schema, assembled);
-                    normalized = r.value;
-                    valid = r.ok;
                 } else {
                     // binding present but no specific paths -> fall back to default behaviour (coerce ev.rawValue)
                     if (schema instanceof PrimitiveType) {
@@ -318,22 +391,23 @@ public final class TelemetryProcessor {
         }
 
         if (schema instanceof Enum es) {
-            List<EnumValue> vals = es.getValues();
-            if (vals == null || vals.isEmpty()) return new CoerceResult(false, null);
-            for (EnumValue ev : vals) {
-                if (ev == null) continue;
-                try {
-                    Method getValue = ev.getClass().getMethod("getValue");
-                    Object lit = getValue.invoke(ev);
-                    if (lit == null) continue;
-                    if (Objects.equals(lit.toString(), parsed == null ? null : parsed.toString())) return new CoerceResult(true, parsed);
-                    if (lit instanceof Number && parsed instanceof Number) {
-                        double a = ((Number) lit).doubleValue();
-                        double b = ((Number) parsed).doubleValue();
-                        if (Double.compare(a,b) == 0) return new CoerceResult(true, parsed);
-                    }
-                } catch (Throwable ignore) {}
+            es.prints();
+            List<EnumValue> values = es.getValues();
+            if (values == null || values.isEmpty()) {
+                return new CoerceResult(false, null);
             }
+
+            for (EnumValue ev : values) {
+                if (ev == null || ev.getValue() == null) continue;
+
+                Object enumRaw = ev.getValue().raw();
+
+                // Match any of the enumValues being declared
+                if (Objects.equals(enumRaw, parsed)) {
+                    return new CoerceResult(true, parsed);
+                }
+            }
+
             return new CoerceResult(false, null);
         }
 

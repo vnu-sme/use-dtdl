@@ -24,15 +24,64 @@ public final class TelemetryEngine implements AutoCloseable {
 
     private void consume(TelemetryEvent ev) {
         try {
-            TelemetryFact fact = processor.process(ev);
-            // for now just log the fact, future this will be ocl handling
-            System.err.println("[TelemetryEngine] fact=" + fact);
-            for (String d : fact.diagnostics) System.err.println(" diag: " + d);
+            // If the incoming event has no explicit telemetryName, try to apply all bindings
+            // that target this adapter (ev.source). This allows one adapter posting a full
+            // JSON blob to be mapped to multiple telemetry entries (valuePath and fieldPaths).
+            if (ev.telemetryName == null) {
+                int handled = 0;
+                System.err.println("[TelemetryEngine] incoming raw event without telemetryName, scanning bindings for adapter=" + ev.source);
+
+                for (BindingRegistry.Binding b : registry.all().values()) {
+                    // adapter must match if binding specifies one
+                    if (b.adapterId != null && ev.source != null && !b.adapterId.equals(ev.source)) continue;
+                    // if binding specifies a dtmi, require it to match event dtmi (if event dtmi present)
+                    if (b.dtmi != null && ev.dtmi != null && !b.dtmi.equals(ev.dtmi)) continue;
+
+                    // Create a per-binding event where telemetryName is set to the binding's telemetryName
+                    String targetTelemetry = b.telemetryName;
+                    TelemetryEvent evForBinding = new TelemetryEvent(ev.dtmi, ev.deviceId,
+                            b.objectName != null ? b.objectName : ev.objectName,
+                            targetTelemetry, ev.rawValue, ev.timestamp, ev.source, ev.meta
+                    );
+
+                    System.err.println("[TelemetryEngine] dispatching event to processor for binding: " + b);
+
+                    try {
+                        TelemetryFact fact = processor.process(evForBinding);
+                        System.err.println("[TelemetryEngine] fact=" + fact);
+                        for (String d : fact.diagnostics) System.err.println(" diag: " + d);
+                    } catch (Throwable t) {
+                        System.err.println("[TelemetryEngine] processing failed for binding " + b + ": " + t.getMessage());
+                        t.printStackTrace(System.err);
+                    }
+
+                    handled++;
+                }
+
+                if (handled > 0) {
+                    System.err.println("[TelemetryEngine] processed " + handled + " binding(s) for adapter=" + ev.source);
+                    return; // don't run the single-binding path below
+                }
+
+                // no binding matched -> fall through to single-binding processing
+                System.err.println("[TelemetryEngine] no matching bindings found for adapter=" + ev.source + ", using default processing");
+            }
+
+            // Default single-binding processing (existing behavior)
+            try {
+                TelemetryFact fact = processor.process(ev);
+                System.err.println("[TelemetryEngine] fact=" + fact);
+                for (String d : fact.diagnostics) System.err.println(" diag: " + d);
+            } catch (Throwable t) {
+                System.err.println("[TelemetryEngine] processing failed: " + t.getMessage());
+                t.printStackTrace(System.err);
+            }
         } catch (Throwable t) {
-            System.err.println("[TelemetryEngine] processing failed: " + t.getMessage());
+            System.err.println("[TelemetryEngine] consume error: " + t.getMessage());
             t.printStackTrace(System.err);
         }
     }
+
 
     public void start() {
         bus.start();

@@ -35,8 +35,6 @@ public final class DTDLPluginState {
     }
 
     public static synchronized TelemetryEngine startTelemetryRuntime() {
-        System.err.println("[ENGINE] Telemetry runtime started");
-
         if (telemetryEngine == null) {
             telemetryEngine = new TelemetryEngine();
             // start bus and make engine ready to accept adapters
@@ -47,7 +45,7 @@ public final class DTDLPluginState {
     }
 
     public static synchronized TelemetryEngine telemetryEngine() {
-        return startTelemetryRuntime();
+        return telemetryEngine;
     }
 
     /**

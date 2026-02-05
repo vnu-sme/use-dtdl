@@ -23,16 +23,31 @@
       "description": "Indicates whether the air conditioner is powered on."
     },
     {
-      "@type": "Property",
-      "name": "fanSpeed",
+      "@type": "Telemetry",
+      "name": "daylight",
       "schema": {
         "@type": "Enum",
-        "valueSchema": "string",
+        "valueSchema": "integer",
         "enumValues": [
-          { "name": "low", "enumValue": "low" },
-          { "name": "medium", "enumValue": "medium" },
-          { "name": "high", "enumValue": "high" }
+          { "name": "true", "enumValue": 1 },
+          { "name": "false", "enumValue": 0 }
         ]
+      }
+    },
+    {
+      "@type": "Telemetry",
+      "name": "dailyTelemetryUnits",
+      "description": "The unit of the daily telemetry values",
+      "schema": {
+        "@type": "Map",
+        "mapKey": {
+          "name": "telemetry",
+          "schema": "string"
+        },
+        "mapValue": {
+          "name": "unit",
+          "schema": "string"
+        }
       }
     },
     {
@@ -40,6 +55,17 @@
       "name": "environmentState",
       "description": "Aggregated environmental metrics.",
       "schema": "dtmi:com:example:schemas:EnvironmentState;1"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "windDirection",
+      "displayName": "Wind Direction",
+      "description": "Hourly wind direction for time series data.",
+      "writable": true,
+      "schema": {
+        "@type": "Array",
+        "elementSchema": "long"
+      }
     }
   ]
 }

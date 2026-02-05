@@ -1,6 +1,8 @@
 package org.tzi.use.dtdl.gui.telemetry;
 
 import org.tzi.use.dtdl.DTDLModel.ContentElement;
+import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
+import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
 import org.tzi.use.dtdl.actions.DTDLPluginState;
 import org.tzi.use.dtdl.gui.instance.SchemaInputFactory;
 import org.tzi.use.dtdl.telemetry.BindingRegistry;
@@ -237,7 +239,7 @@ public class ApiRegistrationDialog extends JDialog {
         int row = 0;
 
         for (ContentElement ce : iface.getContents()) {
-            if (!(ce instanceof org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry telemetry)) {
+            if (!(ce instanceof Telemetry telemetry)) {
                 continue;
             }
 
@@ -259,10 +261,8 @@ public class ApiRegistrationDialog extends JDialog {
             telemetryPanel.add(header, gbc);
             row++;
 
-            // primitive or enum
-            if (sch instanceof PrimitiveType ||
-                    sch instanceof org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum) {
-
+            // 1) Primitive or enum -> single value path
+            if (sch instanceof PrimitiveType || sch instanceof org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum) {
                 gbc.gridx = 0;
                 gbc.gridy = row;
                 gbc.gridwidth = 1;
@@ -275,11 +275,11 @@ public class ApiRegistrationDialog extends JDialog {
                 primitivePathFields.put(teleName, pathField);
                 telemetryPanel.add(pathField, gbc);
                 row++;
-
+                continue;
             }
-            // object schema
-            else if (sch instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object objSch) {
 
+            // 2) Object schema -> per-field paths (existing behavior)
+            if (sch instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object objSch) {
                 Map<String, JTextField> fieldMap = new LinkedHashMap<>();
 
                 for (Field f : objSch.getFields()) {
@@ -289,13 +289,58 @@ public class ApiRegistrationDialog extends JDialog {
                 }
 
                 objectFieldPathFields.put(teleName, fieldMap);
+                continue;
             }
-            // fallback (array, map, etc.)
-            else {
+
+            // 3) Array schema -> if element is object, allow per-field inputs for element schema;
+            //    otherwise treat as single value-path (extract entire array).
+            if (sch instanceof Array arrSch) {
+                Schema elem = SchemaInputFactory.resolveNamedSchema(arrSch.getElementSchema(), iface);
+
+                if (elem instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object elemObj) {
+                    // treat as object-like: show fields (user should enter JSON path that extracts element field,
+                    // e.g. "items[0].temp" or whichever path syntax JacksonPath supports for their use case)
+                    Map<String, JTextField> fieldMap = new LinkedHashMap<>();
+                    // add an optional hint row explaining this is per-element field extraction
+                    gbc.gridx = 0;
+                    gbc.gridy = row;
+                    gbc.gridwidth = 2;
+                    JLabel hint = new JLabel("Array of objects — enter per-element field paths (paths are applied to each element).");
+                    hint.setFont(hint.getFont().deriveFont(Font.ITALIC, hint.getFont().getSize() - 1f));
+                    telemetryPanel.add(hint, gbc);
+                    row++;
+
+                    for (Field f : elemObj.getFields()) {
+                        JTextField pf = new JTextField();
+                        fieldMap.put(f.getName(), pf);
+                        row = addLabeledRow(gbc, "- " + f.getName() + ":", pf, row);
+                    }
+                    objectFieldPathFields.put(teleName, fieldMap);
+                } else {
+                    // array of primitive/enum/map -> single value path that extracts the array
+                    gbc.gridx = 0;
+                    gbc.gridy = row;
+                    gbc.gridwidth = 1;
+                    gbc.weightx = 0;
+                    telemetryPanel.add(new JLabel("value path (array):"), gbc);
+
+                    gbc.gridx = 1;
+                    gbc.weightx = 1.0;
+                    JTextField pf = new JTextField();
+                    primitivePathFields.put(teleName, pf);
+                    telemetryPanel.add(pf, gbc);
+                    row++;
+                }
+                continue;
+            }
+
+            // 4) Map schema -> treat as single value path (extract whole map)
+            if (sch instanceof org.tzi.use.dtdl.DTDLModel.Schema.Map.Map) {
                 gbc.gridx = 0;
                 gbc.gridy = row;
+                gbc.gridwidth = 1;
                 gbc.weightx = 0;
-                telemetryPanel.add(new JLabel("value path:"), gbc);
+                telemetryPanel.add(new JLabel("value path (map):"), gbc);
 
                 gbc.gridx = 1;
                 gbc.weightx = 1.0;
@@ -303,7 +348,22 @@ public class ApiRegistrationDialog extends JDialog {
                 primitivePathFields.put(teleName, pf);
                 telemetryPanel.add(pf, gbc);
                 row++;
+                continue;
             }
+
+            // 5) fallback: single value path
+            gbc.gridx = 0;
+            gbc.gridy = row;
+            gbc.gridwidth = 1;
+            gbc.weightx = 0;
+            telemetryPanel.add(new JLabel("value path:"), gbc);
+
+            gbc.gridx = 1;
+            gbc.weightx = 1.0;
+            JTextField pf = new JTextField();
+            primitivePathFields.put(teleName, pf);
+            telemetryPanel.add(pf, gbc);
+            row++;
         }
 
         telemetryPanel.revalidate();
@@ -311,11 +371,21 @@ public class ApiRegistrationDialog extends JDialog {
     }
 
 
+
     private void onAdd() {
         String url = urlField.getText().trim();
-        if (url.isEmpty()) { JOptionPane.showMessageDialog(this, "URL required"); return; }
+        if (url.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "URL required");
+            return;
+        }
+
         long interval;
-        try { interval = Long.parseLong(intervalField.getText().trim()); } catch (Exception ex) { JOptionPane.showMessageDialog(this, "Invalid interval"); return; }
+        try {
+            interval = Long.parseLong(intervalField.getText().trim());
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Invalid interval");
+            return;
+        }
 
         String selectedInstance = null;
         Object sel = instanceCombo.getSelectedItem();
@@ -342,15 +412,16 @@ public class ApiRegistrationDialog extends JDialog {
             DTDLPluginState.registerAndAttachAdapter(adapter);
             listModel.addElement(renderAdapterLine(adapter));
 
-            // create and register bindings for entered paths
-            BindingRegistry registry = DTDLPluginState.startTelemetryRuntime().registry();
+            // register bindings for entered paths
+            BindingRegistry registry = DTDLPluginState.telemetryEngine().registry();
 
             // primitive telemetry bindings
             for (Map.Entry<String, JTextField> en : primitivePathFields.entrySet()) {
                 String teleName = en.getKey();
                 String path = en.getValue().getText();
-                if (path == null) path = null;
+
                 if (path != null) path = path.trim();
+
                 if (path != null && !path.isEmpty()) {
                     String bindId = "bind-" + UUID.randomUUID().toString().substring(0,8);
                     BindingRegistry.Binding b = new BindingRegistry.Binding(null, teleName, adapter.id(), bindTargetObject, path);
