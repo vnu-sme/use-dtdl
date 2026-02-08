@@ -29,33 +29,26 @@ public final class HttpPollingAdapter implements TelemetryAdapter {
     private final String id;
     private final String url;
     private final long intervalMs;
-    private final String dtmi;
-    private final String telemetryName;
     private final String deviceId;
     private final String objectName;
-    private final String valuePath;
 
     private final HttpClient client;
     private final ScheduledExecutorService scheduler;
     private final AtomicReference<Consumer<TelemetryEvent>> handler = new AtomicReference<>();
     private final AtomicReference<ScheduledFuture<?>> running = new AtomicReference<>();
 
-    public HttpPollingAdapter(String id, String url, long intervalMs, String dtmi, String telemetryName,
-                              String deviceId, String objectName, String valuePath) {
+    public HttpPollingAdapter(String id, String url, long intervalMs, String deviceId, String objectName) {
         this.id = Objects.requireNonNull(id, "id");
         this.url = Objects.requireNonNull(url, "url");
         if (intervalMs < 100) throw new IllegalArgumentException("intervalMs too small");
 
         System.err.println(
-                "[HttpPollingAdapter:init] id=" + id + " url=" + url + " dtmi=" + dtmi + " telemetry=" + telemetryName +
-                        " deviceId=" + deviceId + " objectName=" + objectName + " rawValuePath='" + valuePath + "'");
+                "[HttpPollingAdapter:init] id=" + id + " url=" + url +
+                        " deviceId=" + deviceId + " objectName=" + objectName);
 
         this.intervalMs = intervalMs;
-        this.dtmi = dtmi;
-        this.telemetryName = telemetryName;
         this.deviceId = deviceId;
         this.objectName = objectName;
-        this.valuePath = valuePath;
 
         this.client = HttpClient.newBuilder()
                 .connectTimeout(java.time.Duration.ofSeconds(5))
@@ -95,30 +88,18 @@ public final class HttpPollingAdapter implements TelemetryAdapter {
             if (body != null) {
                 String trimmed = body.trim();
                 if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-                    // JSON-ish -> try dot-path extraction
-                    if (valuePath != null && !valuePath.isBlank()) {
-                        extracted = JacksonPath.extract(trimmed, valuePath);
-                        System.err.println("[ADAPTER] About to extract valuePath='" + valuePath +
-                                "' from JSON body length=" + trimmed.length());
-                    } else {
-                        // fallback: the whole body
-                        extracted = trimmed;
-                    }
-                } else {
-                    // plain scalar
                     extracted = trimmed;
                 }
             }
-            System.err.println("[ADAPTER] Extracted value=" + extracted +
-                    " telemetry=" + telemetryName +
-                    " dtmi=" + dtmi);
+            System.err.println("[ADAPTER] Extracted value=" + (extracted != null ? "<json/scalar>" : extracted) +
+                    " dtmi=<adapter-none> source=" + id);
 
-            TelemetryEvent ev = new TelemetryEvent(dtmi, deviceId, objectName, telemetryName, extracted, Instant.now(), id, Map.of("httpStatus", resp.statusCode(), "url", url));
+            TelemetryEvent ev = new TelemetryEvent(null, deviceId, objectName, extracted, Instant.now(), id, Map.of("httpStatus", resp.statusCode(), "url", url));
             Consumer<TelemetryEvent> h = handler.get();
             if (h != null) h.accept(ev);
         } catch (IOException | InterruptedException ex) {
             // network errors: still emit a diagnostic TelemetryEvent with meta containing exception message (optional)
-            TelemetryEvent ev = new TelemetryEvent(dtmi, deviceId, objectName, telemetryName, null, Instant.now(), id, Map.of("error", ex.getMessage(), "url", url));
+            TelemetryEvent ev = new TelemetryEvent(null, deviceId, objectName, null, Instant.now(), id, Map.of("error", ex.getMessage(), "url", url));
             Consumer<TelemetryEvent> h = handler.get();
             if (h != null) h.accept(ev);
             // restore interrupt state
@@ -152,23 +133,11 @@ public final class HttpPollingAdapter implements TelemetryAdapter {
         return intervalMs;
     }
 
-    public String dtmi() {
-        return dtmi;
-    }
-
-    public String telemetryName() {
-        return telemetryName;
-    }
-
     public String deviceId() {
         return deviceId;
     }
 
     public String objectName() {
         return objectName;
-    }
-
-    public String valuePath() {
-        return valuePath;
     }
 }

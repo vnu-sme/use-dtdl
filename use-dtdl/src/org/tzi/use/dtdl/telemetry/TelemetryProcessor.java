@@ -4,7 +4,6 @@ import org.tzi.use.dtdl.DTDLModel.ContentElement;
 import org.tzi.use.dtdl.DTDLModel.DTDLModel;
 import org.tzi.use.dtdl.DTDLModel.Interface;
 import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
-import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumLiteral;
 import org.tzi.use.dtdl.DTDLModel.Schema.PrimitiveType;
 import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
 import org.tzi.use.dtdl.DTDLModel.Schema.Object.Field;
@@ -18,8 +17,6 @@ import org.tzi.use.dtdl.actions.DTDLPluginState;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.tzi.use.dtdl.util.JacksonPath;
 
-import java.lang.reflect.Method;
-import java.time.Instant;
 import java.util.*;
 import java.util.Optional;
 
@@ -31,15 +28,22 @@ public final class TelemetryProcessor {
         this.bindings = bindings;
     }
 
-
     public TelemetryFact process(TelemetryEvent ev) {
+        return doProcess(bindings.find(ev.dtmi, null, ev.source), ev);
+    }
+
+    public TelemetryFact process(TelemetryEvent ev, BindingRegistry.Binding binding) {
+        return doProcess(Optional.ofNullable(binding), ev);
+    }
+
+    private TelemetryFact doProcess(Optional<BindingRegistry.Binding> bindingOpt, TelemetryEvent ev) {
         if (ev == null) throw new IllegalArgumentException("event required");
 
         DTDLModelRegistry reg = DTDLPluginState.registry();
         if (reg == null || reg.getCanonicalModel() == null) {
             TelemetryFact f = new TelemetryFact(
                     TelemetryFact.Status.UNKNOWN_INTERFACE,
-                    ev.dtmi, null, ev.telemetryName,
+                    ev.dtmi, null, null,
                     null, ev.timestamp, ev.source,
                     ev.objectName, ev.meta
             );
@@ -49,11 +53,9 @@ public final class TelemetryProcessor {
 
         DTDLModel model = reg.getCanonicalModel();
 
-        Optional<BindingRegistry.Binding> bindingOpt = bindings.find(ev.dtmi, ev.telemetryName, ev.source);
-
-        // Determine telemetry name to use for lookups: prefer event name, but fall back to binding.telemetryName
-        String telemetryNameForLookup = ev.telemetryName;
-        if ((telemetryNameForLookup == null || telemetryNameForLookup.isBlank()) && bindingOpt.isPresent()) {
+        // Determine telemetry name to use for lookups: prefer binding.telemetryName if present
+        String telemetryNameForLookup = null;
+        if (bindingOpt.isPresent()) {
             BindingRegistry.Binding bb = bindingOpt.get();
             if (bb.telemetryName != null && !bb.telemetryName.isBlank()) telemetryNameForLookup = bb.telemetryName;
         }
@@ -96,13 +98,13 @@ public final class TelemetryProcessor {
 
         // If we still have no interface and there's no binding, we can't proceed
         if (iface == null && bindingOpt.isEmpty()) {
-            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.UNKNOWN_INTERFACE, ev.dtmi, null, ev.telemetryName, null, ev.timestamp, ev.source, null, ev.meta);
-            f.addDiag("No interface found and no binding available (dtmi=" + ev.dtmi + ", tele=" + ev.telemetryName + ")");
+            TelemetryFact f = new TelemetryFact(TelemetryFact.Status.UNKNOWN_INTERFACE, ev.dtmi, null, telemetryNameForLookup, null, ev.timestamp, ev.source, ev.objectName, ev.meta);
+            f.addDiag("No interface found and no binding available (dtmi=" + ev.dtmi + ", tele=" + telemetryNameForLookup + ")");
             return f;
         }
 
         // find matching content element by name (telemetry name) if possible
-        ContentElement  matchedContent = null;
+        ContentElement matchedContent = null;
         if (telemetryNameForLookup != null) {
             for (ContentElement ce : iface.getContents()) {
                 if (telemetryNameForLookup.equals(ce.getName())) {
@@ -122,7 +124,6 @@ public final class TelemetryProcessor {
             if (c.getRequest() != null) schema = c.getRequest().getSchema();
         }
 
-
         // Processing/coercion: either use binding if present (valuePath or fieldPaths), otherwise default behaviour
         Object normalized = null;
         boolean valid = true;
@@ -130,8 +131,6 @@ public final class TelemetryProcessor {
         try {
             if (bindingOpt.isPresent()) {
                 BindingRegistry.Binding b = bindingOpt.get();
-                // If telemetry name is missing on event but binding specified a telemetryName and matchedContent is null, we tried to infer iface earlier.
-                // Apply binding extraction first if configured.
                 if (b.valuePath != null) {
                     Object extracted = JacksonPath.extract(
                             ev.rawValue instanceof String ? (String) ev.rawValue : String.valueOf(ev.rawValue),
@@ -148,11 +147,8 @@ public final class TelemetryProcessor {
                         valid = r.ok;
                     }
                 } else if (b.fieldPaths != null) {
-                    System.err.println(
-                            "[PROCESSOR] Using fieldPaths binding for telemetry='" + b.telemetryName + "'"
-                    );
+                    System.err.println("[PROCESSOR] Using fieldPaths binding for telemetry='" + b.telemetryName + "'");
                     try {
-                        // parse incoming raw (if it's JSON text parse into objects)
                         Object parsedRaw = ev.rawValue;
                         if (parsedRaw instanceof String) {
                             String s = ((String) parsedRaw).trim();
@@ -161,30 +157,18 @@ public final class TelemetryProcessor {
                             }
                         }
 
-                        System.err.println(
-                                "[PROCESSOR] Parsed raw value type = " +
-                                        (parsedRaw == null ? "null" : parsedRaw.getClass().getName())
-                        );
+                        System.err.println("[PROCESSOR] Parsed raw value type = " + (parsedRaw == null ? "null" : parsedRaw.getClass().getName()));
 
-                        // If the parsed raw value is a list -> assemble one map per element
                         if (parsedRaw instanceof List) {
-                            System.err.println(
-                                    "[PROCESSOR] Detected ARRAY input (" + ((List<?>) parsedRaw).size() + " elements)"
-                            );
                             List<?> rawList = (List<?>) parsedRaw;
                             List<Object> assembledList = new ArrayList<>(rawList.size());
 
                             for (Object elem : rawList) {
-                                System.err.println(
-                                        "[PROCESSOR] Assembling array element index=" + assembledList.size()
-                                );
                                 Map<String, Object> assembledElem = new LinkedHashMap<>();
                                 String elemJson;
                                 try {
-                                    // ensure we have JSON text for JacksonPath.extract
                                     elemJson = (elem instanceof String) ? (String) elem : MAPPER.writeValueAsString(elem);
                                 } catch (Exception ex) {
-                                    // fallback: toString if serialization fails
                                     elemJson = String.valueOf(elem);
                                 }
 
@@ -202,13 +186,10 @@ public final class TelemetryProcessor {
                                 assembledList.add(assembledElem);
                             }
 
-                            // coerce assembled list (should match array-of-object schema)
                             var r = coerceAgainstSchema(schema, assembledList);
                             normalized = r.value;
                             valid = r.ok;
                         } else {
-                            System.err.println("[PROCESSOR] Detected OBJECT input (single element)");
-                            // assemble a single map
                             Map<String, Object> assembled = new LinkedHashMap<>();
                             String baseJson;
                             try {

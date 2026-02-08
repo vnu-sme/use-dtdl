@@ -1,10 +1,7 @@
 package org.tzi.use.dtdl.telemetry;
 
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 
@@ -86,10 +83,37 @@ public final class BindingRegistry {
 
 
     public Optional<Binding> find(String dtmi, String telemetryName, String adapterId) {
-    // prefer exact matches, otherwise first matching entry
+        // prefer strongest exact match: adapterId + telemetryName + dtmi
+        for (Binding b : bindings.values()) {
+            if (Objects.equals(b.adapterId, adapterId)
+                    && Objects.equals(b.telemetryName, telemetryName)
+                    && Objects.equals(b.dtmi, dtmi)) {
+                return Optional.of(b);
+            }
+        }
+        // fallback: any binding that matches per matches() rules
         for (Binding b : bindings.values()) {
             if (b.matches(dtmi, telemetryName, adapterId)) return Optional.of(b);
         }
         return Optional.empty();
+    }
+
+
+    /**
+     * Return only bindings that either explicitly target the given adapterId or are global (adapterId == null)
+     */
+    public Collection<Binding> bindingsForAdapter(String adapterId) {
+        List<Binding> out = new ArrayList<>();
+        for (Binding b : bindings.values()) {
+            if (b == null) continue;
+            if (b.adapterId == null) { // global binding -> always candidate
+                out.add(b);
+                continue;
+            }
+            if (adapterId != null && adapterId.equals(b.adapterId)) {
+                out.add(b);
+            }
+        }
+        return out;
     }
 }

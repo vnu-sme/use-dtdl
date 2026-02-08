@@ -404,8 +404,8 @@ public class ApiRegistrationDialog extends JDialog {
         String dev = Utils.blankToNull(deviceIdField.getText());
 
         String id = "api-" + UUID.randomUUID().toString().substring(0,8);
-        // We don't set a specific telemetryName here on the adapter: adapter will post raw events and bindings decide mapping
-        HttpPollingAdapter adapter = new HttpPollingAdapter(id, url, interval, null, null, dev, bindTargetObject, null);
+
+        HttpPollingAdapter adapter = new HttpPollingAdapter(id, url, interval, dev, bindTargetObject);
 
         try {
             // register and start adapter
@@ -474,8 +474,7 @@ public class ApiRegistrationDialog extends JDialog {
     }
 
     private String renderAdapterLine(TelemetryAdapter a) {
-        return a.id() + " | " + a.getClass().getSimpleName() + " | url=" + (a instanceof HttpPollingAdapter ? ((HttpPollingAdapter)a).url() : "<n/a>")
-                + " | tele=" + (a instanceof HttpPollingAdapter ? (((HttpPollingAdapter)a).telemetryName() == null ? "<any>" : ((HttpPollingAdapter)a).telemetryName()) : "<any>");
+        return a.id() + " | " + a.getClass().getSimpleName() + " | url=" + (a instanceof HttpPollingAdapter ? ((HttpPollingAdapter) a).url() : "<n/a>");
     }
 
     private String parseIdFromLine(String line) {
