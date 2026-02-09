@@ -90,17 +90,12 @@ public class MapInputPanel extends JPanel implements ValueProvider {
             Object rawK = adapter.extractValueFromInput(r.key);
             Object rawV = adapter.extractValueFromInput(r.value);
 
-            Schema keySchema = schema.getMapKey() != null ? schema.getMapKey().getSchema() : null;
-            Schema valSchema = schema.getMapValue() != null ? schema.getMapValue().getSchema() : null;
+            // propagate inner-panel invalid
+            if (rawK == InputValidation.INVALID || rawV == InputValidation.INVALID) return InputValidation.INVALID;
 
-            Object k = SchemaInputFactory.tryCoerceToSchema(rawK, keySchema);
-            Object v = SchemaInputFactory.tryCoerceToSchema(rawV, valSchema);
-
-            if (rawK != null && k == null) return InputValidation.INVALID;
-            if (rawV != null && v == null) return InputValidation.INVALID;
-
-            if (k != null && v != null) {
-                out.put(k, v);
+            // keep raw values (authoritative coercion later)
+            if (rawK != null && rawV != null) {
+                out.put(rawK, rawV);
             }
         }
         return out.isEmpty() ? null : out;

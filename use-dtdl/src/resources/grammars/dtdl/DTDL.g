@@ -133,7 +133,15 @@ value returns [ASTSchema schema, String text, Object obj]
     | b=BOOLEAN
       { $text = $b.getText(); $obj = Boolean.parseBoolean($text); }
     | n=NUMBER
-      { $text = $n.getText(); $obj = $text; }
+      {
+          String txt = $n.getText();
+          if (txt.contains(".")) {
+              $obj = Double.parseDouble(txt);
+          } else {
+              $obj = Integer.parseInt(txt);
+          }
+          $text = txt;
+      }
     | a=arrayValue
       { $obj = $a.list; }
     | jsonObjectValue

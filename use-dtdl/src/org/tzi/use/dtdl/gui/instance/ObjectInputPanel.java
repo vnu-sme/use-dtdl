@@ -51,9 +51,8 @@ public final class ObjectInputPanel extends JPanel implements ValueProvider {
         for (var e : fields.entrySet()) {
             Schema sch = fieldSchemas.get(e.getKey());
             Object raw = adapter.extractValueFromInput(e.getValue());
-            Object coerced = SchemaInputFactory.tryCoerceToSchema(raw, sch);
-            if (raw != null && coerced == null) return InputValidation.INVALID;
-            if (coerced != null) out.put(e.getKey(), coerced);
+            if (raw == InputValidation.INVALID) return InputValidation.INVALID;
+            if (raw != null) out.put(e.getKey(), raw);
         }
         return out.isEmpty() ? null : out;
     }
