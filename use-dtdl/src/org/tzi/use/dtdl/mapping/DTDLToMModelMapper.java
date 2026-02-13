@@ -8,7 +8,9 @@ import org.tzi.use.dtdl.DTDLModel.Schema.Object.Field;
 import org.tzi.use.dtdl.DTDLModel.Property.Property;
 import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
 import org.tzi.use.dtdl.DTDLModel.Component.Component;
+import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
+import org.tzi.use.dtdl.util.Utils;
 import org.tzi.use.uml.mm.*;
 import org.tzi.use.uml.ocl.type.Type;
 import org.tzi.use.api.UseModelApi;
@@ -136,7 +138,33 @@ public class DTDLToMModelMapper {
             MClass cls = ifaceToClass.get(iface.getId());
             if (cls == null) continue;
             for (ContentElement ce : iface.getContents()) {
-                if (ce instanceof Property) {
+                if (ce instanceof Telemetry tel) {
+                    // create a telemetry attribute on the class, prefix it to mark as telemetry-only
+                    String telName = tel.getName();
+                    if (telName != null && !telName.isEmpty()) {
+                        push(cls.name());
+                        push(telName);
+                        String tName = mapSchemaToTypeName(tel.getSchema());
+                        pop();
+                        pop();
+
+                        // build safe attribute name with prefix and sanitize underlying name
+                        String attrName = Utils.TELEMETRY_ATTR_PREFIX + sanitize(telName);
+
+                        boolean exists = false;
+                        for (MAttribute a : cls.allAttributes()) {
+                            if (a.name().equals(attrName)) { exists = true; break; }
+                        }
+                        if (!exists) {
+                            api.createAttributeEx(cls, attrName, api.getType(tName));
+                            if (logWriter != null) logWriter.println("[DTDL->M] added telemetry attribute " + attrName + " : " + tName + " to class " + cls.name());
+                        } else {
+                            if (logWriter != null) logWriter.println("[DTDL->M] skipped telemetry attribute (exists) " + attrName + " on class " + cls.name());
+                        }
+                    }
+                    // continue with next content element
+                    continue;
+                } else if (ce instanceof Property) {
                     Property p = (Property) ce;
                     if (p.getName() == null) continue;
                     push(ifaceToClass.get(iface.getId()).name());

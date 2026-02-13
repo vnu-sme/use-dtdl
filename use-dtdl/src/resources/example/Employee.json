@@ -1,0 +1,41 @@
+{
+  "@context": "dtmi:dtdl:context;4",
+  "@id": "dtmi:employee:Employee:Person;1",
+  "@type": "Interface",
+  "displayName": "Person",
+  "description": "Person entity with basic employee attributes",
+  "contents": [
+    {
+      "@type": "Property",
+      "name": "name",
+      "schema": "string"
+    },
+    {
+      "@type": "Property",
+      "name": "age",
+      "schema": "integer"
+    },
+    {
+      "@type": "Property",
+      "name": "salary",
+      "schema": "double"
+    },
+    {
+      "@type": "Telemetry",
+      "name": "environmentState",
+      "description": "Aggregated environmental metrics.",
+      "schema": "dtmi:com:example:schemas:EnvironmentState;1"
+    }
+  ],
+  "schemas": [
+    {
+      "@id": "dtmi:com:example:schemas:EnvironmentState;1",
+      "@type": "Object",
+      "fields": [
+        { "name": "temperature", "schema": "double" },
+        { "name": "humidity", "schema": "double" },
+        { "name": "windSpeed", "schema": "double" }
+      ]
+    }
+  ]
+}

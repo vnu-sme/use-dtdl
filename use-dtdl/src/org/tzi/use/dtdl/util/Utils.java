@@ -2,6 +2,8 @@ package org.tzi.use.dtdl.util;
 
 public final class Utils {
 
+    public static final String TELEMETRY_ATTR_PREFIX = "__tel_";
+
     private Utils() {
     }
 
