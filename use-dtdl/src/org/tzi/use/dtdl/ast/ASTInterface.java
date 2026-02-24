@@ -13,6 +13,7 @@ import static org.tzi.use.dtdl.ast.schema.SchemaFactory.primitiveSchemaFromName;
 
 public class ASTInterface extends ASTNode {
     public String displayName;
+    public String context;
     protected List<ASTRelationship> relationships;
     protected List<ASTProperty> properties;
     protected List<ASTCommand> commands;

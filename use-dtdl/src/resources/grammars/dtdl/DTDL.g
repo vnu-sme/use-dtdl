@@ -16,6 +16,21 @@ package org.tzi.use.dtdl.parser;
     String stripQuotes(String s) {
         return s.substring(1, s.length() - 1);
     }
+
+    /**
+         * Pick language string from a language map.
+         * Prefer "en", otherwise take first string-valued entry.
+         * Returns null if no suitable string found.
+    */
+    String pickLangString(java.util.Map<?,?> m) {
+        if (m == null) return null;
+        Object en = m.get("en");
+        if (en instanceof String) return (String) en;
+        for (java.util.Map.Entry<?,?> e : m.entrySet()) {
+            if (e.getValue() instanceof String) return (String) e.getValue();
+        }
+        return null;
+    }
 }
 
 /* =======================
@@ -54,8 +69,31 @@ interfaceField[ASTInterface iface]
         iface.props.put(k, ov);
 
         if (k.equals("@id")) iface.id = (String)ov;
-        else if (k.equals("displayName")) iface.displayName = (String)ov;
-        else if (k.equals("description")) iface.description = (String)ov;
+        else if ("displayName".equals(k)) {
+            if (ov instanceof String) {
+                iface.displayName = (String) ov;
+            } else if (ov instanceof java.util.Map<?,?>) {
+                iface.displayName = pickLangString((java.util.Map<?,?>) ov);
+            }
+        }
+        else if ("description".equals(k)) {
+            if (ov instanceof String) {
+                iface.description = (String) ov;
+            } else if (ov instanceof java.util.Map<?,?>) {
+                iface.description = pickLangString((java.util.Map<?,?>) ov);
+            }
+        }
+        else if (k.equals("@context")) {
+            if (ov instanceof String) {
+                iface.context = (String) ov;
+            }
+            else if (ov instanceof java.util.List<?>) {
+                java.util.List<?> list = (java.util.List<?>) ov;
+                if (!list.isEmpty() && list.get(0) instanceof String) {
+                    iface.context = (String) list.get(0); // take first entry
+                }
+            }
+        }
       }
     ;
 
@@ -116,6 +154,19 @@ genericPair[ASTContent n]
         else if ($value.text != null) valObj = $value.text;
 
         n.props.put(key, valObj);
+
+        // normalize localizable strings for displayName/description to String (prefer "en")
+        if ("displayName".equals(key) && valObj instanceof java.util.Map<?,?>) {
+            String picked = pickLangString((java.util.Map<?,?>) valObj);
+            if (picked != null) {
+                n.props.put(key, picked);
+            }
+        } else if ("description".equals(key) && valObj instanceof java.util.Map<?,?>) {
+            String picked = pickLangString((java.util.Map<?,?>) valObj);
+            if (picked != null) {
+                n.props.put(key, picked);
+            }
+        }
 
         if ("name".equals(key) && valObj instanceof String) {
             n.name = (String)valObj;

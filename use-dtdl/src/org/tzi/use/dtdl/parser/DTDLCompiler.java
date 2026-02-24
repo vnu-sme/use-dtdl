@@ -21,6 +21,22 @@ public class DTDLCompiler {
 
         ANTLRInputStream input;
         try {
+            // Wrap with PushbackInputStream so we can consume a UTF-8 BOM if present,
+            // otherwise push the bytes back so the lexer sees the original stream.
+            PushbackInputStream pin = new PushbackInputStream(in, 3);
+            byte[] probe = new byte[3];
+            int n = pin.read(probe);
+            if (n == 3 &&
+                    (probe[0] & 0xFF) == 0xEF &&
+                    (probe[1] & 0xFF) == 0xBB &&
+                    (probe[2] & 0xFF) == 0xBF) {
+
+                err.println("[DTDLCompiler] UTF-8 BOM detected and skipped.");
+            } else {
+                if (n > 0) pin.unread(probe, 0, n);
+                err.println("[DTDLCompiler] No UTF-8 BOM detected.");
+            }
+
             input = new ANTLRInputStream(in);
             input.name = inName;
         } catch (IOException e) {
