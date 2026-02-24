@@ -469,6 +469,23 @@ public class CreateInstanceDialog extends JDialog {
                 Object val = en.getValue();
                 MClass cls = session.system().model().getClass(obj.cls().name());
                 MAttribute mAttr = cls != null ? cls.attribute(attr, true) : null;
+
+                if (mAttr != null && mAttr.name() != null &&
+                        mAttr.name().startsWith(Utils.TELEMETRY_ATTR_PREFIX)) {
+                    System.err.println("[DTDL] skipping telemetry attribute on create: " + mAttr.name());
+                    continue;
+                }
+
+                if (mAttr == null) {
+                    // attempt to find an attribute that matches the telemetry-prefixed form (should not be set)
+                    String telCandidate = Utils.TELEMETRY_ATTR_PREFIX + Utils.sanitize(attr);
+                    MAttribute telAttr = cls != null ? cls.attribute(telCandidate, true) : null;
+                    if (telAttr != null) {
+                        System.err.println("[DTDL] refusing to set telemetry attribute (found by prefixed name): " + telAttr.name());
+                        continue;
+                    }
+                }
+
                 org.tzi.use.uml.ocl.type.Type attrType = mAttr != null ? mAttr.type() : null;
 
                 System.err.println("[DEBUG] setting attribute:");
@@ -484,11 +501,14 @@ public class CreateInstanceDialog extends JDialog {
 
                 Value value = useService.buildUseValue(attrType, val);
 
-
                 try {
-                    sysApi.setAttributeValueEx(session.system().state().objectByName(createdName), mAttr, value);
-                    System.err.println("  assignment OK via setAttributeValueEx");
-                    System.err.println("  stored value = " + value);
+                    if (mAttr == null) {
+                        System.err.println("  attribute not found on class (skipping): " + attr);
+                    } else {
+                        sysApi.setAttributeValueEx(session.system().state().objectByName(createdName), mAttr, value);
+                        System.err.println("  assignment OK via setAttributeValueEx");
+                        System.err.println("  stored value = " + value);
+                    }
                 } catch (UseApiException assignEx) {
                     System.err.println("  assignment failed via setAttributeValueEx: " + assignEx.getMessage());
                 }

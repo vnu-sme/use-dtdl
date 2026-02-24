@@ -39,5 +39,23 @@
                 tooltip="Manage telemetry data"
                 id="org.tzi.use.dtdl.actions.ManageTelemetryAction">
         </action>
+        <action
+                label="Start consuming telemetry data"
+                class="org.tzi.use.dtdl.actions.StartTelemetryRuntimeAction"
+                menu="use-dtdl"
+                menuitem="Manage telemetry data"
+                toolbaritem="Manage telemetry data"
+                tooltip="Manage telemetry data"
+                id="org.tzi.use.dtdl.actions.StartTelemetryRuntimeAction">
+        </action>
+        <action
+                label="Integrate OCL for behavior"
+                class="org.tzi.use.dtdl.actions.MergeOclIntoModelAction"
+                menu="use-dtdl"
+                menuitem="Integrate OCL for behavior"
+                toolbaritem="Integrate OCL for behavior"
+                tooltip="Integrate OCL for behavior"
+                id="org.tzi.use.dtdl.actions.MergeOclIntoModelAction">
+        </action>
     </actions>
 </plugin>
