@@ -11,6 +11,9 @@ import org.tzi.use.dtdl.DTDLModel.Component.Component;
 import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.dtdl.util.Utils;
+import org.tzi.use.parser.SemanticException;
+import org.tzi.use.parser.Symtable;
+import org.tzi.use.parser.ocl.OCLCompiler;
 import org.tzi.use.uml.mm.*;
 import org.tzi.use.uml.ocl.type.Type;
 import org.tzi.use.api.UseModelApi;
@@ -20,6 +23,7 @@ import org.tzi.use.uml.ocl.expr.VarDecl;
 import org.tzi.use.uml.ocl.expr.VarDeclList;
 
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
@@ -42,7 +46,7 @@ public class DTDLToMModelMapper {
     }
 
     public MModel map() throws UseApiException {
-        ensurePrimitiveTypes();
+//        ensurePrimitiveTypes();
         createClassesForInterfaces();
         createDataTypesForNamedSchemas();
         createAttributesAndAssociations();
@@ -296,7 +300,7 @@ public class DTDLToMModelMapper {
             for (ContentElement ce : iface.getContents()) {
                 if (ce instanceof org.tzi.use.dtdl.DTDLModel.Command.Command) {
                     org.tzi.use.dtdl.DTDLModel.Command.Command cmd = (org.tzi.use.dtdl.DTDLModel.Command.Command) ce;
-                    VarDeclList varDecls = new VarDeclList(true);
+                    VarDeclList varDecls = new VarDeclList(false);
                     if (cmd.getRequest() != null) {
                         Schema s = cmd.getRequest().getSchema();
                         push(cls.name());
@@ -343,21 +347,139 @@ public class DTDLToMModelMapper {
             if (dt == null) throw new UseApiException("Could not obtain created data type " + dtName);
 
             push("Object");
-            for (Field f : obj.getFields()) {
+            List<Field> fields = obj.getFields();
+
+            for (Field f : fields) {
                 push(f.getName());
-                String ftName = mapSchemaToTypeName(f.getSchema());
+                mapSchemaToTypeName(f.getSchema());
                 pop();
-                Type ft = api.getType(ftName);
-
-                boolean exists = dt.attributes().stream()
-                        .anyMatch(a -> a.name().equals(f.getName()));
-
-                if (!exists) {
-                    addAttributeToDataType(dt, f.getName(), ft);
-                }
             }
 
-            pop();
+            try {
+                // create backing attributes for constructor parameters FIRST
+                for (Field field : fields) {
+                    String fname = field.getName();
+                    if (fname == null) continue;
+                    String fitName = mapSchemaToTypeName(field.getSchema());
+                    Type ftType = api.getType(fitName);
+                    boolean attrExists = dt.attributes().stream().anyMatch(a -> a.name().equals(fname));
+                    if (!attrExists) {
+                        try {
+                            addAttributeToDataType(dt, fname, ftType);
+                            if (logWriter != null) logWriter.println("[DTDL->M] added backing attribute '" + fname + "' : " + fitName + " to dataType " + dt.name());
+                        } catch (UseApiException uae) {
+                            if (logWriter != null) logWriter.println("[DTDL->M] failed to add backing attribute '" + fname + "': " + uae.getMessage());
+                        }
+                    } else {
+                        if (logWriter != null) logWriter.println("[DTDL->M] backing attribute '" + fname + "' already exists on dataType " + dt.name());
+                    }
+                }
+
+                // Now synthesize constructor parameters from dt.allAttributes() so names/order match invariants
+                VarDeclList ctorParams = new VarDeclList(false);
+                List<MAttribute> allAttrs = dt.allAttributes();
+                if (logWriter != null) {
+                    logWriter.println(">>> Constructor will use attribute order:");
+                    for (MAttribute a : allAttrs) logWriter.println("    - " + a.name());
+                }
+                for (MAttribute a : allAttrs) {
+                    Type t = a.type();
+                    ctorParams.add(new VarDecl(a.name(), t));
+                }
+
+                MOperation ctor = new MOperation(dt.name(), ctorParams, null, true);
+                try {
+                    dt.addOperation(ctor);
+                    if (logWriter != null) logWriter.println("[DTDL->M] added constructor op " + ctor.name() + "(...) to dataType " + dt.name());
+                } catch (MInvalidModelException ex) {
+                    if (logWriter != null) logWriter.println("[DTDL->M] constructor already exists or invalid: " + ex.getMessage());
+                    // If constructor exists but is invalid, we leave it alone to avoid breaking model invariants.
+                }
+
+                // create getters and compile OCL expressions (self.<field>)
+                for (Field field : fields) {
+                    String fname = field.getName();
+                    if (fname == null) continue;
+
+                    String fitName = mapSchemaToTypeName(field.getSchema());
+                    Type ftType = api.getType(fitName);
+
+                    String getterName = "get" + Character.toUpperCase(fname.charAt(0)) + fname.substring(1);
+                    VarDeclList noParams = new VarDeclList(false);
+                    MOperation getter = new MOperation(getterName, noParams, ftType, false);
+
+                    try {
+                        dt.addOperation(getter);
+                    } catch (MInvalidModelException ex) {
+                        for (MOperation mop : dt.operations()) {
+                            if (Objects.equals(mop.name(), getterName)) {
+                                getter = mop;
+                                break;
+                            }
+                        }
+                    }
+
+                    try {
+                        StringWriter errBuffer = new StringWriter();
+                        PrintWriter errorPrinter = new PrintWriter(errBuffer, true);
+                        Symtable symTable = new Symtable();
+                        try {
+                            symTable.add("self", dt, null);
+                            if (logWriter != null) logWriter.println("[DEBUG] Added 'self' to symtable with type: " + dt.name());
+                        } catch (SemanticException se) {
+                            if (logWriter != null)
+                                logWriter.println("[DEBUG] Failed adding self to symtable: " + se.getMessage());
+                        }
+
+                        String body = "self." + fname;
+
+                        org.tzi.use.uml.ocl.expr.Expression bodyExp = OCLCompiler.compileExpression(api.getModel(), body,
+                                "DTDLGetter", errorPrinter, symTable);
+
+                        if (bodyExp == null) {
+                            if (logWriter != null) logWriter.println("[DEBUG] Compiler errors: " + errBuffer);
+                        } else {
+                            if (logWriter != null) logWriter.println("[DEBUG] Expression type: " + bodyExp.type());
+
+                            try {
+                                getter.setExpression(bodyExp);
+
+                                // verify expression is attached
+                                if (getter.expression() != null) {
+                                    logWriter.println("[DEBUG] Getter now has expression attached.");
+                                } else {
+                                    logWriter.println("[DEBUG] Getter expression STILL NULL after setExpression.");
+                                }
+
+                            } catch (Exception e) {
+                                if (logWriter != null) {
+                                    logWriter.println("[DEBUG] setExpression FAILED: " + e.getMessage());
+                                    e.printStackTrace(logWriter);
+                                }
+                            }
+                        }
+
+                    } catch (Throwable ex) {
+                        if (logWriter != null) {
+                            logWriter.println("[DEBUG] Unexpected error compiling getter expression:");
+                            ex.printStackTrace(logWriter);
+                        }
+                    }
+
+                    // dump operations after each getter
+                    if (logWriter != null) {
+                        logWriter.println("[DEBUG] Current operations in DT " + dt.name() + ":");
+                        for (MOperation mop : dt.operations()) {
+                            logWriter.println("   - " + mop.name() + " | hasExpr=" + (mop.expression() != null));
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                throw new UseApiException("Failed to create constructor/getters for data type " + dt.name(), ex);
+            } finally {
+                pop();
+            }
+
             return dtName;
         }
 
