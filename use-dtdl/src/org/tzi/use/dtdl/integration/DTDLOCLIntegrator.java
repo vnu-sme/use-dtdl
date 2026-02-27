@@ -7,6 +7,7 @@ import org.tzi.use.uml.mm.MModel;
 import org.tzi.use.uml.mm.ModelFactory;
 import org.tzi.use.uml.sys.MSystem;
 import org.tzi.use.uml.mm.MMPrintVisitor;
+import org.tzi.use.util.uml.sorting.UseFileOrderComparator;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -51,9 +52,39 @@ public final class DTDLOCLIntegrator {
             StringWriter modelSw = new StringWriter();
             PrintWriter modelPw = new PrintWriter(modelSw, true);
             MMPrintVisitor mmv = new MMPrintVisitor(modelPw);
+
             session.system().model().processWithVisitor(mmv);
             modelPw.flush();
             String modelText = modelSw.toString();
+
+            // inject MDataTypes after "model <name>"
+            StringWriter dtSw = new StringWriter();
+            PrintWriter dtPw = new PrintWriter(dtSw, true);
+            MMPrintVisitor dtVisitor = new MMPrintVisitor(dtPw);
+
+            var model = session.system().model();
+            org.tzi.use.uml.mm.MDataType[] dataTypes =
+                    model.dataTypes().toArray(new org.tzi.use.uml.mm.MDataType[0]);
+            java.util.Arrays.sort(dataTypes, new UseFileOrderComparator());
+
+            for (org.tzi.use.uml.mm.MDataType dt : dataTypes) {
+                dt.processWithVisitor(dtVisitor);
+                dtPw.println();
+            }
+
+            dtPw.flush();
+            String dtText = dtSw.toString();
+
+            // remove attributes blocks to avoid merged parser errors
+            dtText = dtText.replaceAll("(?ms)\\n\\s*attributes\\b.*?(?=\\n\\s*(operations\\b|end\\b))", "\n");
+
+            // insert after first line (model declaration)
+            int firstNewline = modelText.indexOf('\n');
+            if (firstNewline > 0) {
+                modelText = modelText.substring(0, firstNewline + 1)
+                        + "\n" + dtText + "\n"
+                        + modelText.substring(firstNewline + 1);
+            }
 
             // 2) Concatenate model text and user-provided OCL/spec
             StringBuilder combined = new StringBuilder();
@@ -62,6 +93,10 @@ public final class DTDLOCLIntegrator {
             combined.append("\n\n// ---- user-provided OCL/spec ----\n");
             combined.append(oclSpec == null ? "" : oclSpec);
             combined.append("\n");
+
+            System.out.println("==== FINAL COMBINED SPEC ====");
+            System.out.println(combined);
+            System.out.println("==== END FINAL COMBINED SPEC ====");
 
             // 3) Compile combined specification
             String specName = "dtdl-merged-spec";
