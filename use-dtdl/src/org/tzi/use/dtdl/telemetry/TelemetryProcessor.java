@@ -139,12 +139,23 @@ public final class TelemetryProcessor {
                     System.err.println("[PROCESSOR] Binding valuePath extracted: " + extracted + " for path=" + b.valuePath);
                     if (schema != null && schema instanceof PrimitiveType) {
                         var r = tryCoercePrimitive(extracted, ((PrimitiveType) schema).getTypeName());
-                        normalized = r.value;
                         valid = r.ok;
+                        if (!valid) {
+                            normalized = null;
+                        } else {
+                            // wrapIfNeeded will only wrap non-primitive schemas, but it's safe to call here
+                            normalized = wrapIfNeeded(r.value, schema, telemetryNameForLookup, b);
+                        }
                     } else {
                         var r = coerceAgainstSchema(schema, extracted);
-                        normalized = r.value;
                         valid = r.ok;
+                        if (!valid) {
+                            normalized = null;
+                        } else {
+                            // For non-primitive schemas (Object/Map/Array/DataType) wrap the coerced result
+                            // under the telemetry name so TelemetryApplier writes the whole attribute.
+                            normalized = wrapIfNeeded(r.value, schema, telemetryNameForLookup, b);
+                        }
                     }
                 } else if (b.fieldPaths != null) {
                     System.err.println("[PROCESSOR] Using fieldPaths binding for telemetry='" + b.telemetryName + "'");
@@ -187,8 +198,12 @@ public final class TelemetryProcessor {
                             }
 
                             var r = coerceAgainstSchema(schema, assembledList);
-                            normalized = r.value;
                             valid = r.ok;
+                            if (!valid) {
+                                normalized = null;
+                            } else {
+                                normalized = wrapIfNeeded(r.value, schema, telemetryNameForLookup, b);
+                            }
                         } else {
                             Map<String, Object> assembled = new LinkedHashMap<>();
                             String baseJson;
@@ -211,8 +226,13 @@ public final class TelemetryProcessor {
                             }
 
                             var r = coerceAgainstSchema(schema, assembled);
-                            normalized = r.value;
                             valid = r.ok;
+                            if (!valid) {
+                                normalized = null;
+                            } else {
+                                // wrap the object under telemetry name so TelemetryApplier will write the full DataType attribute
+                                normalized = wrapIfNeeded(r.value, schema, telemetryNameForLookup, b);
+                            }
                         }
                     } catch (Exception ex) {
                         System.err.println("[PROCESSOR] binding fieldPaths extraction failed: " + ex.getMessage());
@@ -267,21 +287,19 @@ public final class TelemetryProcessor {
     }
 
 
-    private static class CoerceResult {
-        final boolean ok;
-        final Object value;
-        CoerceResult(boolean ok, Object value) { this.ok = ok; this.value = value; }
-    }
+    private record CoerceResult(boolean ok, Object value) {}
 
     private static CoerceResult tryCoercePrimitive(Object raw, String tname) {
         if (raw == null) return new CoerceResult(true, null);
         if (tname == null) tname = "string";
         tname = tname.toLowerCase();
         try {
+            boolean intCond = tname.contains("int") || tname.equals("integer") || tname.equals("long");
+            boolean floatCond = tname.contains("float") || tname.contains("double") || tname.equals("number") || tname.equals("real");
             if (raw instanceof String) {
                 String s = ((String) raw).trim();
-                if (tname.contains("int") || tname.equals("integer") || tname.equals("long")) return new CoerceResult(true, Integer.parseInt(s));
-                if (tname.contains("float") || tname.contains("double") || tname.equals("number") || tname.equals("real")) return new CoerceResult(true, Double.parseDouble(s));
+                if (intCond) return new CoerceResult(true, Integer.parseInt(s));
+                if (floatCond) return new CoerceResult(true, Double.parseDouble(s));
                 if (tname.contains("bool")) {
                     if ("true".equalsIgnoreCase(s)) return new CoerceResult(true, Boolean.TRUE);
                     if ("false".equalsIgnoreCase(s)) return new CoerceResult(true, Boolean.FALSE);
@@ -289,11 +307,11 @@ public final class TelemetryProcessor {
                 }
                 return new CoerceResult(true, s);
             }
-            if (tname.contains("int") || tname.equals("integer") || tname.equals("long")) {
+            if (intCond) {
                 if (raw instanceof Number) return new CoerceResult(true, ((Number) raw).intValue());
                 return new CoerceResult(false, null);
             }
-            if (tname.contains("float") || tname.contains("double") || tname.equals("number") || tname.equals("real")) {
+            if (floatCond) {
                 if (raw instanceof Number) return new CoerceResult(true, ((Number) raw).doubleValue());
                 return new CoerceResult(false, null);
             }
@@ -339,8 +357,7 @@ public final class TelemetryProcessor {
             return new CoerceResult(true, out);
         }
 
-        if (schema instanceof Array) {
-            Array arrSchema = (Array) schema;
+        if (schema instanceof Array arrSchema) {
             Schema elemSchema = arrSchema.getElementSchema();
             List<?> srcList = parsed instanceof List ? (List<?>) parsed : null;
             if (srcList == null) return new CoerceResult(false, null);
@@ -381,11 +398,17 @@ public final class TelemetryProcessor {
             for (EnumValue ev : values) {
                 if (ev == null || ev.getValue() == null) continue;
 
-                Object enumRaw = ev.getValue().raw();
+                // get the declared numeric/string value for this enum entry
+                Object enumRaw = (ev.getValue() == null) ? null : ev.getValue().raw();
 
-                // Match any of the enumValues being declared
-                if (Objects.equals(enumRaw, parsed)) {
-                    return new CoerceResult(true, parsed);
+                // Match either by the raw value (e.g. numeric 1) or by explicit name (e.g. "true")
+                if (Objects.equals(enumRaw, parsed) || Objects.equals(ev.getName(), parsed)) {
+                    if (enumRaw != null) {
+                        return new CoerceResult(true, String.valueOf(enumRaw));
+                    } else {
+                        // fallback to DTDL name if no raw value present
+                        return new CoerceResult(true, ev.getName());
+                    }
                 }
             }
 
@@ -393,5 +416,15 @@ public final class TelemetryProcessor {
         }
 
         return new CoerceResult(true, parsed);
+    }
+
+    private static Object wrapIfNeeded(Object coercedValue, Schema schema, String telemetryNameForLookup, BindingRegistry.Binding binding) {
+        String key = telemetryNameForLookup != null ? telemetryNameForLookup : (binding == null ? null : binding.telemetryName);
+
+        if (key != null && schema != null && !(schema instanceof PrimitiveType)) {
+            return Collections.singletonMap(key, coercedValue);
+        }
+
+        return coercedValue;
     }
 }

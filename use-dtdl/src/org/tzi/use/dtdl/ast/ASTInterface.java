@@ -72,6 +72,7 @@ public class ASTInterface extends ASTNode {
 
     public void printsAll() {
         System.out.println("ASTInterface");
+        System.out.println("context:" + context);
         System.out.println("displayName: " + displayName);
         System.out.println("extendsInterfaces: " + extendsInterfaces);
         System.out.println("description: " + description);

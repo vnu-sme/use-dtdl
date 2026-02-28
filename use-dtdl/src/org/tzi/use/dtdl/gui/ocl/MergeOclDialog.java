@@ -2,6 +2,8 @@ package org.tzi.use.dtdl.gui.ocl;
 
 import org.tzi.use.main.Session;
 import org.tzi.use.dtdl.integration.DTDLOCLIntegrator;
+import org.tzi.use.uml.mm.MMPrintVisitor;
+import org.tzi.use.util.uml.sorting.UseFileOrderComparator;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -51,15 +53,53 @@ public class MergeOclDialog extends JDialog {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw, true);
             try {
-                // print current model
-                org.tzi.use.uml.mm.MMPrintVisitor mmv = new org.tzi.use.uml.mm.MMPrintVisitor(pw);
+                StringWriter modelSw = new StringWriter();
+                PrintWriter modelPw = new PrintWriter(modelSw, true);
+
+                MMPrintVisitor mmv = new MMPrintVisitor(modelPw);
                 session.system().model().processWithVisitor(mmv);
+                modelPw.flush();
+
+                String modelText = modelSw.toString();
+
+                // inject MDataTypes after "model <name>"
+                StringWriter dtSw = new StringWriter();
+                PrintWriter dtPw = new PrintWriter(dtSw, true);
+                MMPrintVisitor dtVisitor = new MMPrintVisitor(dtPw);
+
+                var model = session.system().model();
+                org.tzi.use.uml.mm.MDataType[] dataTypes =
+                        model.dataTypes().toArray(new org.tzi.use.uml.mm.MDataType[0]);
+                java.util.Arrays.sort(dataTypes, new UseFileOrderComparator());
+
+                for (org.tzi.use.uml.mm.MDataType dt : dataTypes) {
+                    dt.processWithVisitor(dtVisitor);
+                    dtPw.println();
+                }
+
+                dtPw.flush();
+                // get original dt text
+                String dtText = dtSw.toString();
+
+
+                // remove "attributes" sections from dataType blocks to avoid USE parser errors
+                // Explanation: remove the '\n attributes ...' block up to the next 'operations' or 'end'
+                dtText = dtText.replaceAll("(?ms)\\n\\s*attributes\\b.*?(?=\\n\\s*(operations\\b|end\\b))", "\n");
+
+                // insert after first line (model declaration)
+                int firstNewline = modelText.indexOf('\n');
+                if (firstNewline > 0) {
+                    modelText = modelText.substring(0, firstNewline + 1) + "\n" + dtText + "\n" + modelText.substring(firstNewline + 1);
+                }
+
+                pw.println("// ---- model (generated) ----");
+                pw.println(modelText);
+                pw.println("\n\n// ---- user-provided OCL/spec ----\n");
+                pw.println(textArea.getText());
+                pw.flush();
             } catch (Throwable t) {
                 pw.println("[Preview] Failed to export model: " + t.getMessage());
             }
-            pw.println("\n\n// ---- user-provided OCL/spec ----\n");
-            pw.println(textArea.getText());
-            pw.flush();
 
             JTextArea preview = new JTextArea(sw.toString(), 30, 120);
             preview.setEditable(false);

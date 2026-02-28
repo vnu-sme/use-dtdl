@@ -8,6 +8,8 @@ import org.tzi.use.main.Session;
 import org.tzi.use.uml.mm.*;
 import org.tzi.use.uml.ocl.type.*;
 import org.tzi.use.uml.ocl.value.*;
+import org.tzi.use.uml.sys.MDataTypeValue;
+import org.tzi.use.uml.sys.MInstance;
 import org.tzi.use.uml.sys.MObject;
 import org.tzi.use.uml.sys.MSystem;
 
@@ -125,7 +127,7 @@ public final class UseRuntimeService {
                     }
                 }
 
-                elements.add(new DataTypeValueValue(entryType, null, entryValues));
+                elements.add(createDataTypeValue(entryType, entryValues));
             }
 
             return new SequenceValue(elemType, elements);
@@ -145,7 +147,7 @@ public final class UseRuntimeService {
                             Object attrRaw = rawValues.get(a.name());
                             values.put(a.name(), buildUseValue(a.type(), attrRaw));
                         }
-                        elements.add(new DataTypeValueValue(elementDt, null, values));
+                        elements.add(createDataTypeValue(elementDt, values));
                     } else {
                         // fallback: try to build element value normally
                         elements.add(buildUseValue(elemType, item));
@@ -168,7 +170,7 @@ public final class UseRuntimeService {
                 values.put(attr.name(), attrValue);
             }
 
-            return new DataTypeValueValue(expectedType, null, values);
+            return createDataTypeValue(dt, values);
         }
 
         if (expectedType instanceof CollectionType && raw instanceof Collection) {
@@ -271,5 +273,29 @@ public final class UseRuntimeService {
         }
 
         return null;
+    }
+
+    private Value createDataTypeValue(MDataType dt, Map<String, Value> attributeValues) {
+
+        System.err.println("========== [UseRuntimeService] createDataTypeValue ==========");
+        System.err.println("Datatype: " + dt.name());
+        System.err.println("Attributes incoming: " + attributeValues);
+
+        Map<String, Value> varBindings = new HashMap<>(attributeValues);
+
+        MInstance self = new MDataTypeValue(
+                dt,
+                dt.name(),
+                varBindings
+        );
+
+        System.err.println("[UseRuntimeService] Created MDataTypeValue self = " + self);
+        System.err.println("[UseRuntimeService] self.cls() = " + (self != null ? self.cls() : "<null>"));
+
+        Value result = new DataTypeValueValue(dt, self, attributeValues);
+
+        System.err.println("[UseRuntimeService] Wrapped into DataTypeValueValue = " + result);
+
+        return result;
     }
 }
