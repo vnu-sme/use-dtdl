@@ -1,6 +1,9 @@
 package org.tzi.use.dtdl.telemetry;
 
+import org.tzi.use.main.Session;
+
 import java.io.Closeable;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -14,11 +17,15 @@ public final class TelemetryEngine implements AutoCloseable {
     private final BindingRegistry registry = new BindingRegistry();
     private final TelemetryProcessor processor = new TelemetryProcessor(registry);
     private final EventBus bus;
+    private final Session session;
+    private final List<TelemetryEventListener> listeners = new CopyOnWriteArrayList<>();
+
 
     // track attached adapters by id so we can detach/close them later
     private final ConcurrentHashMap<String, TelemetryAdapter> adapters = new ConcurrentHashMap<>();
 
-    public TelemetryEngine() {
+    public TelemetryEngine(Session session) {
+        this.session = session;
         this.bus = new EventBus(this::consume);
     }
 
@@ -28,6 +35,8 @@ public final class TelemetryEngine implements AutoCloseable {
             // adapters provide raw payloads; bindings map them to telemetry elements.
             int handled = 0;
             System.err.println("[TelemetryEngine] incoming raw event, scanning bindings for adapter=" + ev.source);
+
+            TelemetryApplier applier = new TelemetryApplier(session);
 
             for (BindingRegistry.Binding b : registry.bindingsForAdapter(ev.source)) {
                 // adapter must match if binding specifies one
@@ -40,6 +49,15 @@ public final class TelemetryEngine implements AutoCloseable {
                     TelemetryFact fact = processor.process(ev, b);
                     System.err.println("[TelemetryEngine] fact=" + fact);
                     for (String d : fact.diagnostics) System.err.println(" diag: " + d);
+
+                    // APPLY and CHECK after processing
+                    boolean violated = applier.applyAndCheck(fact);
+                    if (violated) {
+                        String details = String.join("\n", fact.diagnostics);
+                        String adapterId = b.adapterId != null ? b.adapterId : ev.source;
+                        TelemetryApplier.handleViolationAndStop(adapterId, details);
+                        // after stopping adapter, continue to next binding
+                    }
                 } catch (Throwable t) {
                     System.err.println("[TelemetryEngine] processing failed for binding " + b + ": " + t.getMessage());
                     t.printStackTrace(System.err);
@@ -59,6 +77,13 @@ public final class TelemetryEngine implements AutoCloseable {
                 TelemetryFact fact = processor.process(ev);
                 System.err.println("[TelemetryEngine] fact=" + fact);
                 for (String d : fact.diagnostics) System.err.println(" diag: " + d);
+                TelemetryApplier apply = new TelemetryApplier(this.session);
+                boolean violated = apply.applyAndCheck(fact);
+                if (violated) {
+                    String details = String.join("\n", fact.diagnostics);
+                    String adapterId = ev.source;
+                    TelemetryApplier.handleViolationAndStop(adapterId, details);
+                }
             } catch (Throwable t) {
                 System.err.println("[TelemetryEngine] processing failed: " + t.getMessage());
                 t.printStackTrace(System.err);
@@ -120,6 +145,22 @@ public final class TelemetryEngine implements AutoCloseable {
 
     public TelemetryAdapter adapter(String id) {
         return adapters.get(id);
+    }
+
+    public void addListener(TelemetryEventListener l) {
+        listeners.add(l);
+    }
+
+    public void removeListener(TelemetryEventListener l) {
+        listeners.remove(l);
+    }
+
+    void fireViolation(String adapterId, String message) {
+        for (TelemetryEventListener l : listeners) {
+            try {
+                l.onTelemetryViolation(adapterId, message);
+            } catch (Throwable ignored) {}
+        }
     }
 
     @Override

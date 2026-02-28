@@ -409,7 +409,7 @@ public class ApiRegistrationDialog extends JDialog {
 
         try {
             // register and start adapter
-            DTDLPluginState.registerAndAttachAdapter(adapter);
+            DTDLPluginState.registerAndAttachAdapter(adapter, session);
             listModel.addElement(renderAdapterLine(adapter));
 
             // register bindings for entered paths

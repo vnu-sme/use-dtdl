@@ -4,7 +4,9 @@ import org.tzi.use.dtdl.semantic.DTDLContext;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.dtdl.telemetry.TelemetryAdapter;
 import org.tzi.use.dtdl.telemetry.TelemetryEngine;
+import org.tzi.use.main.Session;
 
+import javax.swing.*;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
@@ -34,9 +36,9 @@ public final class DTDLPluginState {
         return ctx;
     }
 
-    public static synchronized TelemetryEngine startTelemetryRuntime() {
+    public static synchronized TelemetryEngine startTelemetryRuntime(Session session) {
         if (telemetryEngine == null) {
-            telemetryEngine = new TelemetryEngine();
+            telemetryEngine = new TelemetryEngine(session);
             // start bus and make engine ready to accept adapters
             telemetryEngine.start();
             System.err.println("[DTDLPluginState] TelemetryEngine started.");
@@ -51,9 +53,9 @@ public final class DTDLPluginState {
     /**
      * Register an adapter in plugin state and attach it to the engine.
      */
-    public static synchronized void registerAndAttachAdapter(TelemetryAdapter adapter) {
+    public static synchronized void registerAndAttachAdapter(TelemetryAdapter adapter, Session session) {
         Objects.requireNonNull(adapter, "adapter");
-        startTelemetryRuntime();
+        startTelemetryRuntime(session);
         TelemetryAdapter prev = adapters.putIfAbsent(adapter.id(), adapter);
         if (prev != null) {
             throw new IllegalStateException("Adapter already registered: " + adapter.id());
