@@ -19,7 +19,7 @@ public class ASTInterface extends ASTNode {
     protected List<ASTCommand> commands;
     protected List<ASTComponent> components;
     protected List<ASTTelemetry> telemetries;
-    protected List<String> extendsInterfaces;
+    public List<String> extendsInterfaces;
     protected List<ASTSchema> schemas;
     public java.util.Map<String,Object> props = new java.util.LinkedHashMap<>();
     public java.util.Map<String, ASTSchema> schemaIndex = new java.util.LinkedHashMap<>();
@@ -58,6 +58,10 @@ public class ASTInterface extends ASTNode {
     }
 
     public List<String> getExtendsList() {
+        if (this.extendsInterfaces != null && !this.extendsInterfaces.isEmpty()) {
+            return new ArrayList<>(this.extendsInterfaces);
+        }
+
         Object ext = props.get("extends");
         if (!(ext instanceof List<?>)) return List.of();
 
@@ -492,23 +496,6 @@ public class ASTInterface extends ASTNode {
         Object typeObj = this.props.get("@type");
         if (!"Interface".equals(typeObj)) {
             ctx.report("Interface @type must be \"Interface\"", id);
-        }
-
-        // extends existence + depth + cycle detection
-        Object extObj = this.props.get("extends");
-        List<String> extendsList = new ArrayList<>();
-        if (extObj instanceof List<?>) {
-            for (Object item : (List<?>) extObj) {
-                if (item instanceof String s) extendsList.add(s);
-                else ctx.report("extends entries must be DTMI strings", id);
-            }
-        }
-
-        // existence check
-        for (String ref : extendsList) {
-            if (!ctx.hasInterface(ref)) {
-                ctx.report("Interface extends unknown interface: " + ref, id);
-            }
         }
 
         // validate duplicate content names inside of interface

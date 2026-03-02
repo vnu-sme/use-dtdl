@@ -83,6 +83,19 @@ interfaceField[ASTInterface iface]
                 iface.description = pickLangString((java.util.Map<?,?>) ov);
             }
         }
+        else if (k.equals("extends")) {
+            java.util.List<String> extList = new java.util.ArrayList<>();
+            if (ov instanceof String s) {
+                extList.add(s);
+            } else if (ov instanceof java.util.List<?>) {
+                for (Object it : (java.util.List<?>) ov) {
+                    if (it instanceof String ss) extList.add(ss);
+                }
+            }
+            iface.extendsInterfaces = extList;
+            // backward
+            iface.props.put("extends", ov);
+        }
         else if (k.equals("@context")) {
             if (ov instanceof String) {
                 iface.context = (String) ov;

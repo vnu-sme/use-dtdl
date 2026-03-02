@@ -564,12 +564,37 @@ public class DTDLToMModelMapper {
 
     private void createGeneralizations() throws UseApiException {
         for (Interface iface : dtdl.getInterfaces().values()) {
-            MClass cls = ifaceToClass.get(iface.getId());
-            if (cls == null) continue;
-            for (Interface p : iface.getExtends()) {
-                MClass parent = ifaceToClass.get(p.getId());
-                if (parent == null) continue;
-                api.createGeneralization(parent.name(), cls.name());
+            MClass child = ifaceToClass.get(iface.getId());
+            if (child == null) continue;
+
+            for (Interface parentIface : iface.getExtends()) {
+                if (parentIface == null) continue;
+
+                MClass parent = ifaceToClass.get(parentIface.getId());
+
+                // Try registry mapping if not created in this import
+                if (parent == null && registry != null) {
+                    Optional<String> mapped = registry.getClassNameForDtmi(parentIface.getId());
+                    if (mapped.isPresent()) {
+                        String mappedName = mapped.get();
+                        parent = api.getModel().getClass(mappedName);
+                        if (parent != null) {
+                            ifaceToClass.put(parentIface.getId(), parent);
+                        }
+                    }
+                }
+
+                if (parent == null) {
+                    if (logWriter != null)
+                        logWriter.println("[DTDL->M] Could not resolve parent for extends: " + parentIface.getId());
+                    continue;
+                }
+
+                api.createGeneralization(child.name(), parent.name());
+
+                if (logWriter != null)
+                    logWriter.println("[DTDL->M] created generalization: "
+                            + child.name() + " -> " + parent.name());
             }
         }
     }
