@@ -8,6 +8,7 @@ import org.tzi.use.dtdl.DTDLModel.DTDLModel;
 import java.util.*;
 
 public class SemanticAnalyzerImpl implements SemanticAnalyzer {
+    private static final int MAX_INHERITANCE_DEPTH = 10;
     private final DTDLModelRegistry registry;
     private final DTDLContext ctx;
 
@@ -52,7 +53,7 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
         for (ASTInterface iface : astInterfaces) {
             try {
                 iface.resolveAll();
-//                iface.printsAll();
+                iface.printsAll();
             } catch (Exception ex) {
                 // keep going but record error
                 Object maybeId = iface.props.get("@id");
@@ -117,49 +118,78 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
     }
 
     private void validateInheritanceGraph() {
-        // 1. Validate non-existence interface
-        Map<String, List<String>> graph = new HashMap<>(); // InterfaceID -> List of InterfaceIDs it extends
+        // Build graph (local AST interfaces only)
+        Map<String, List<String>> graph = new HashMap<>();
 
         for (Map.Entry<String, ASTInterface> e : ctx.interfaces.entrySet()) {
+            String ifaceId = e.getKey();
             ASTInterface ai = e.getValue();
-            Object ex = ai.props.get("extends");
+
+            LinkedHashSet<String> parents = new LinkedHashSet<>();
+            for (String raw : ai.getExtendsList()) {
+                if (raw == null) continue;
+                String p = raw.trim();
+                if (p.isEmpty()) continue;
+                if (p.equals(ifaceId)) {
+                    ctx.report("Interface '" + ifaceId + "' extends itself", ifaceId);
+                    continue;
+                }
+                parents.add(p);
+            }
 
             List<String> exts = new ArrayList<>();
-            if (ex instanceof List<?>) {
-                for (Object o : (List<?>) ex) {
-                    if (o instanceof String s) {
-                        if (ctx.interfaces.containsKey(s)) { // this ifaceId exists in current context --> valid
-                            exts.add(s);
-                        } else if (ctx.getModelForInterface(s) == null) {
-                            ctx.report("Interface extends unknown interface: " + s, e.getKey());
-                        }
+            for (String p : parents) {
+                // If parent is defined in this AST set -> keep as graph edge
+                if (ctx.interfaces.containsKey(p)) {
+                    exts.add(p);
+                } else {
+                    // Not in local AST: consult registry / canonical models
+                    if (ctx.getModelForInterface(p) == null && ctx.getInterfaceFromModels(p) == null) {
+                        ctx.report("Interface '" + ifaceId + "' extends unknown interface: " + p, ifaceId);
                     }
                 }
             }
-            graph.put(e.getKey(), exts); // if all extend ids valid --> store in graph
+
+            graph.put(ifaceId, exts);
         }
 
-
-        // 2. Cycle detection
+        // Cycle detection with full path reporting
         Set<String> visiting = new HashSet<>();
         Set<String> visited = new HashSet<>();
+        Deque<String> stack = new ArrayDeque<>();
 
         for (String id : graph.keySet()) {
-            dfsCycle(id, graph, visiting, visited);
+            if (!visited.contains(id)) {
+                dfsCycle(id, graph, visiting, visited, stack);
+            }
         }
     }
 
-    private void dfsCycle(String node, Map<String, List<String>> graph, Set<String> visiting, Set<String> visited) {
+    private void dfsCycle(String node, Map<String, List<String>> graph, Set<String> visiting, Set<String> visited, Deque<String> stack) {
         if (visiting.contains(node)) {
-            ctx.report("Inheritance cycle detected involving interface: " + node, node);
+            // produce cycle path
+            List<String> cycle = new ArrayList<>();
+            Iterator<String> it = stack.iterator();
+            boolean collecting = false;
+            while (it.hasNext()) {
+                String n = it.next();
+                if (n.equals(node)) collecting = true;
+                if (collecting) cycle.add(n);
+            }
+            cycle.add(node); // close the cycle
+            String path = String.join(" -> ", cycle);
+            ctx.report("Inheritance cycle detected: " + path, node);
             return;
         }
+
         if (visited.contains(node)) return;
 
         visiting.add(node);
-        for (String nxt : graph.getOrDefault(node, List.of())) { // visit all parent nodes
-            dfsCycle(nxt, graph, visiting, visited);
+        stack.push(node);
+        for (String nxt : graph.getOrDefault(node, List.of())) {
+            dfsCycle(nxt, graph, visiting, visited, stack);
         }
+        stack.pop();
         visiting.remove(node);
         visited.add(node);
     }
@@ -169,31 +199,41 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
 
         for (String id : ctx.interfaces.keySet()) {
             int depth = computeDepth(id, cache, new HashSet<>());
-            if (depth > 10) {
-                ctx.report(
-                        "Inheritance depth " + depth +
-                                " exceeds maximum allowed (" + 10 + ")",
-                        id
-                );
+            if (depth >= Integer.MAX_VALUE / 8) {
+                ctx.report("Inheritance cycle detected involving interface: " + id, id);
+            } else if (depth > MAX_INHERITANCE_DEPTH) {
+                ctx.report("Inheritance depth " + depth + " exceeds maximum allowed (" + MAX_INHERITANCE_DEPTH + ")", id);
             }
         }
     }
 
     private int computeDepth(String id, Map<String, Integer> cache, Set<String> visiting) {
         if (cache.containsKey(id)) return cache.get(id);
-        if (visiting.contains(id)) return 0;
+        if (visiting.contains(id)) {
+            // cycle detected — return a sentinel (very large) so caller flags as problematic
+            return Integer.MAX_VALUE / 4;
+        }
 
         visiting.add(id);
         ASTInterface iface = ctx.interfaces.get(id);
         int max = 1;
 
         if (iface != null) {
-            Object ex = iface.props.get("extends");
-            if (ex instanceof List<?>) {
-                for (Object o : (List<?>) ex) {
-                    if (o instanceof String s && ctx.interfaces.containsKey(s)) {
-                        max = Math.max(max, 1 + computeDepth(s, cache, visiting));
-                    }
+            for (String p : iface.getExtendsList()) {
+                if (p == null) continue;
+                String parent = p.trim();
+                if (parent.isEmpty()) continue;
+                if (!ctx.interfaces.containsKey(parent)) {
+                    // parent is external (registered) -> we assume unknown depth contribution (count as +1)
+                    max = Math.max(max, 1 + 1); // treat external parent as depth 2
+                    continue;
+                }
+                int d = computeDepth(parent, cache, visiting);
+                if (d >= Integer.MAX_VALUE / 8) {
+                    // cycle detected lower in chain, propagate sentinel
+                    max = Integer.MAX_VALUE / 4;
+                } else {
+                    max = Math.max(max, 1 + d);
                 }
             }
         }

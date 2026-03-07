@@ -69,6 +69,33 @@ public final class Converter {
             }
         }
 
+        // Phase 2.1: resolve 'extends' relationships and populate Interface.extendsInterfaces
+        for (ASTInterface a : astIfaces) {
+            Object idObj = a.props.get("@id");
+            if (!(idObj instanceof String ifaceId)) continue;
+            Interface di = model.getInterface(ifaceId);
+            if (di == null) continue;
+
+            List<String> parentIds = a.getExtendsList();
+            if (parentIds == null || parentIds.isEmpty()) continue;
+
+            for (String parentId : parentIds) {
+                if (parentId == null) continue;
+
+                Interface parentIface = model.getInterface(parentId);
+
+                if (parentIface == null) {
+                    parentIface = ctx.getInterfaceFromModels(parentId);
+                }
+
+                if (parentIface != null) {
+                    di.addExtends(parentIface);
+                } else {
+                    ctx.report("Could not resolve extends parent interface: " + parentId + " for interface " + ifaceId, ifaceId);
+                }
+            }
+        }
+
         // Phase 3: contents (properties/telemetries/commands/relationships/components)
         for (ASTInterface a : astIfaces) {
             Object idObj = a.props.get("@id");
