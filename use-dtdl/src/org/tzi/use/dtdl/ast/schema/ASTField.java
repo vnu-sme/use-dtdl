@@ -10,6 +10,10 @@ public class ASTField extends ASTNode {
         this.printsGeneralInfo();
         System.out.println("ASTField.name: " + name);
 
-        schema.prints();
+        if (schema != null) {
+            schema.prints();
+        } else {
+            System.out.println("ASTField.schema: null");
+        }
     }
 }

@@ -9,6 +9,8 @@ public class ASTMapKey extends ASTSchema {
         this.printsGeneralInfo();
         System.out.println("ASTMapKey.name: " + name);
         System.out.println("ASTMapKey.schema: " + schema);
-        schema.prints();
+        if (schema != null) {
+            schema.prints();
+        }
     }
 }
