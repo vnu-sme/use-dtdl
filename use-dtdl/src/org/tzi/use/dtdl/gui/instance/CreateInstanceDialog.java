@@ -456,10 +456,13 @@ public class CreateInstanceDialog extends JDialog {
             UseModelApi modelApi = new UseModelApi(session.system().model());
 
             Optional<String> mapped = registry.getClassNameForDtmi(ifaceId);
-            String className = mapped.orElseGet(() -> Utils.sanitize(ifaceId));
-            if (session.system().model().getClass(className) == null) {
-                modelApi.createClass(className, false);
+
+            if (mapped.isEmpty()) {
+                throw new IllegalStateException(
+                        "No class mapping found for DTMI: " + ifaceId + ". Model should have been created through the mapper.");
             }
+
+            String className = mapped.get();
 
             MObject obj = sysApi.createObject(className, name);
             String createdName = obj.name();

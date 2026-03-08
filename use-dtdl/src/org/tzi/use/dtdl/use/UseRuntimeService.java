@@ -26,8 +26,13 @@ public final class UseRuntimeService {
     public List<String> listUseObjectsForDtInterface(String targetIfaceId) {
         if (targetIfaceId == null) return Collections.emptyList();
         DTDLModelRegistry registry = DTDLPluginState.registry();
+
         Optional<String> mapped = registry != null ? registry.getClassNameForDtmi(targetIfaceId) : Optional.empty();
-        String targetClass = mapped.orElseGet(() -> Utils.sanitize(targetIfaceId));
+        if (mapped.isEmpty()) {
+            throw new IllegalStateException("No USE class mapping for DTMI: " + targetIfaceId);
+        }
+        String targetClass = mapped.get();
+
         if (session == null || session.system() == null) return Collections.emptyList();
         Set<MObject> all = session.system().state().allObjects();
         List<String> names = new ArrayList<>();

@@ -80,7 +80,7 @@ public class DTDLToMModelMapper {
 
     private void createClassesForInterfaces() throws UseApiException {
         for (Interface iface : dtdl.getInterfaces().values()) {
-            String cname = sanitize(iface.getId());
+            String cname = sanitize(Utils.getInterfaceDisplayName(iface));
             if (cname == null || cname.isEmpty()) cname = "Unnamed";
 
             // 1) Registry mapping (preferred)
@@ -93,14 +93,12 @@ public class DTDLToMModelMapper {
                         if (logWriter != null) logWriter.println("[DTDL->M] reused class from registry: " + cls.name() + " for " + iface.getId());
                         continue;
                     } else {
-                        // stale mapping: remove it and continue
                         if (logWriter != null) logWriter.println("[DTDL->M] registry mapping stale for " + iface.getId() + " -> " + mapped.get() + " (class not found); clearing mapping");
-                        // fall through (we'll create/choose a class)
                     }
                 }
             }
 
-            // 2) If a class with the sanitized name exists -> reuse
+            // 2) If a class with the sanitized displayName exists -> reuse
             MClass cls = api.getModel().getClass(cname);
             if (cls != null) {
                 ifaceToClass.put(iface.getId(), cls);
@@ -109,7 +107,7 @@ public class DTDLToMModelMapper {
                 continue;
             }
 
-            // 3) Create deterministic fallback name (sanitize + hash suffix)
+            // 3) Create deterministic fallback name (displayName + hash of dtmi for uniqueness)
             String fallback = cname + "_" + stableHash(iface.getId());
             if (api.getModel().getClass(fallback) == null) {
                 api.createClass(fallback, false);
@@ -123,15 +121,19 @@ public class DTDLToMModelMapper {
 
     private void createDataTypesForNamedSchemas() throws UseApiException {
         for (Interface iface : dtdl.getInterfaces().values()) {
+            String ifaceDisplay = sanitize(Utils.getInterfaceDisplayName(iface));
+            if (ifaceDisplay == null || ifaceDisplay.isEmpty()) ifaceDisplay = "NamedIface";
             for (Map.Entry<String, Schema> e : iface.getSchemas().entrySet()) {
                 Schema s = e.getValue();
                 if (s instanceof org.tzi.use.dtdl.DTDLModel.NamedSchema) {
-                    String dtName = sanitize(iface.getId() + "_" + e.getKey());
+                    // use interface display name + the local schema name
+                    String dtName = sanitize(ifaceDisplay + "_" + e.getKey());
                     if (dtName == null || dtName.isEmpty()) dtName = "Named";
                     if (api.getModel().getDataType(dtName) == null) {
                         api.createDataType(dtName, false);
                     }
                     schemaToTypeName.put(s, dtName);
+                    if (logWriter != null) logWriter.println("[DTDL->M] created dataType for named schema: " + dtName + " (iface=" + iface.getId() + ", schemaKey=" + e.getKey() + ")");
                 }
             }
         }
@@ -211,16 +213,28 @@ public class DTDLToMModelMapper {
                         continue;
                     }
 
-                    String assocBase = sanitize(cls.name() + "_" + (r.getId() != null ? r.getId() : r.getName()));
+                    String relName = sanitize(nonNull(r.getName(), "rel"));
+
+                    String srcName = sanitize(Utils.getInterfaceDisplayName(iface));
+                    String tgtName = sanitize(Utils.getInterfaceDisplayName(tgt));
+
+                    String assocBase = sanitize(srcName + "_" + relName + "_" + tgtName);
                     String assocName = assocBase;
 
-                    while (api.getModel().getAssociation(assocName) != null || api.getModel().getAssociationClass(assocName) != null) {
-                        assocName = assocBase + "_" + stableHash(nonNull(r.getId(), r.getName()) + assocName);
+                    while (api.getModel().getAssociation(assocName) != null ||
+                            api.getModel().getAssociationClass(assocName) != null) {
+                        assocName = assocBase + "_" + stableHash(nonNull(r.getId(), relName) + assocName);
                     }
 
                     String[] classNames = new String[] { cls.name(), targetCls.name() };
-                    String leftRole = r.getName() != null ? r.getName() : targetCls.nameAsRolename();
-                    String[] roleNames = new String[] { leftRole, targetCls.nameAsRolename() };
+
+                    // deterministic role names (prevents collisions and supports self relationships)
+                    String leftRole = relName + "From";
+                    String rightRole = relName + "To";
+
+                    String[] roleNames = new String[] { leftRole, rightRole };
+
+
                     String leftMult = multiplicityToString(r.getMinMultiplicity(), r.getMaxMultiplicity());
                     String rightMult = "0..*";
                     String[] multiplicities = new String[] { leftMult, rightMult };
@@ -274,18 +288,30 @@ public class DTDLToMModelMapper {
                         if (compCls == null) continue;
                         ifaceToClass.put(c.getSchemaInterface().getId(), compCls);
                     }
-                    String assocBase = sanitize(cls.name() + "_comp_" + (c.getId() != null ? c.getId() : c.getName()));
+
+                    String srcDisplay = sanitize(Utils.getInterfaceDisplayName(iface));
+                    if (srcDisplay == null || srcDisplay.isEmpty()) srcDisplay = sanitize(iface.getDisplayName());
+                    String compDisplay = sanitize(nonNull(c.getName(), compCls.nameAsRolename()));
+
+                    String assocBase = sanitize(srcDisplay + "_comp_" + compDisplay);
                     String assocName = assocBase;
-                    if (api.getModel().getAssociation(assocName) != null) assocName = assocName + "_" + stableHash(nonNull(c.getId(), c.getName()));
-                    String[] classNames = new String[] { cls.name(), compCls.name() };
-                    String[] roleNames = new String[] { c.getName() != null ? c.getName() : compCls.nameAsRolename(), compCls.nameAsRolename() };
+                    if (api.getModel().getAssociation(assocName) != null) assocName = assocName + "_" + stableHash(compDisplay);
+
+                    String[] classNames = new String[] { ifaceToClass.get(iface.getId()).name(), compCls.name() };
+
+                    String leftRole = srcDisplay + "_" + compDisplay;
+                    String rightRole = compDisplay + "Of" + srcDisplay;
+                    String[] roleNames = new String[] { leftRole, rightRole };
+
                     String[] multiplicities = new String[] { "1", "0..*" };
                     int[] aggr = new int[] { MAggregationKind.COMPOSITION, MAggregationKind.NONE };
                     boolean[] ordered = new boolean[] { false, false };
 
-                    if (!associationExists(cls.name(), compCls.name(), roleNames[0], roleNames[1])) {
+                    if (!associationExists(classNames[0], classNames[1], roleNames[0], roleNames[1])) {
                         api.createAssociation(assocName, classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
-                        if (logWriter != null) logWriter.println("[DTDL->M] created component association: " + assocName);
+                        if (logWriter != null) logWriter.println("[DTDL->M] created component association: " + assocName + " roles=" + Arrays.toString(roleNames));
+                    } else {
+                        if (logWriter != null) logWriter.println("[DTDL->M] skipped component association (exists): " + assocName);
                     }
                 } else {
                     // skip other content elements

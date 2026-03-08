@@ -54,10 +54,11 @@ public final class TelemetryApplier {
         String className = null;
         if (ifaceId != null && registry != null) {
             var opt = registry.getClassNameForDtmi(ifaceId);
-            if (opt.isPresent()) className = opt.get();
-        }
-        if (className == null && ifaceId != null) {
-            className = Utils.sanitize(ifaceId);
+            if (opt.isPresent()) {
+                className = opt.get();
+            } else {
+                throw new IllegalStateException("No USE class mapping for DTMI: " + ifaceId);
+            }
         }
 
         try {
