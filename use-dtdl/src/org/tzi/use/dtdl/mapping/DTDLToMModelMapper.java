@@ -28,6 +28,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.*;
 
+import static org.tzi.use.dtdl.mapping.MapperHelper.*;
+
 public class DTDLToMModelMapper {
     private final DTDLModel dtdl;
     private final UseModelApi api;
@@ -108,7 +110,7 @@ public class DTDLToMModelMapper {
             }
 
             // 3) Create deterministic fallback name (displayName + hash of dtmi for uniqueness)
-            String fallback = cname + "_" + stableHash(iface.getId());
+            String fallback = cname + "_" + stableHash(iface.getId(), iface);
             if (api.getModel().getClass(fallback) == null) {
                 api.createClass(fallback, false);
             }
@@ -223,20 +225,16 @@ public class DTDLToMModelMapper {
 
                     while (api.getModel().getAssociation(assocName) != null ||
                             api.getModel().getAssociationClass(assocName) != null) {
-                        assocName = assocBase + "_" + stableHash(nonNull(r.getId(), relName) + assocName);
+                        assocName = assocBase + "_" + stableHash(nonNull(r.getId(), relName) + assocName, ce);
                     }
 
                     String[] classNames = new String[] { cls.name(), targetCls.name() };
 
-                    // deterministic role names (prevents collisions and supports self relationships)
-                    String leftRole = relName + "From";
-                    String rightRole = relName + "To";
-
-                    String[] roleNames = new String[] { leftRole, rightRole };
-
+                    String[] roleNames = computeRoleNames(cls, targetCls, srcName, tgtName, relName, r);
 
                     String leftMult = multiplicityToString(r.getMinMultiplicity(), r.getMaxMultiplicity());
                     String rightMult = "0..*";
+
                     String[] multiplicities = new String[] { leftMult, rightMult };
                     int[] aggr = new int[] { MAggregationKind.NONE, MAggregationKind.NONE };
                     boolean[] ordered = new boolean[] { false, false };
@@ -295,7 +293,7 @@ public class DTDLToMModelMapper {
 
                     String assocBase = sanitize(srcDisplay + "_comp_" + compDisplay);
                     String assocName = assocBase;
-                    if (api.getModel().getAssociation(assocName) != null) assocName = assocName + "_" + stableHash(compDisplay);
+                    if (api.getModel().getAssociation(assocName) != null) assocName = assocName + "_" + stableHash(compDisplay, ce);
 
                     String[] classNames = new String[] { ifaceToClass.get(iface.getId()).name(), compCls.name() };
 
@@ -647,35 +645,6 @@ public class DTDLToMModelMapper {
         } catch (Exception ex) {
             throw new UseApiException("Failed to add attribute '" + attrName + "' to datatype '" + dt.name() + "'", ex);
         }
-    }
-
-    private String sanitize(String id) {
-        if (id == null) return null;
-        String s = id.replaceAll("[^A-Za-z0-9_]", "_");
-        if (s.isEmpty()) s = "Unnamed";
-        if (Character.isDigit(s.charAt(0))) s = "_" + s;
-        return s;
-    }
-
-    private int stableHash(String s) {
-        return s == null ? System.identityHashCode(this) : Math.abs(s.hashCode());
-    }
-
-    private String multiplicityToString(Integer min, Integer max) {
-        int lo = min == null ? 0 : min.intValue();
-        int hi = max == null ? Integer.MAX_VALUE : max.intValue();
-        if (hi == Integer.MAX_VALUE) {
-            if (lo == 0) return "0..*";
-            if (lo == 1) return "1..*";
-            return lo + "..*";
-        } else {
-            if (lo == hi) return String.valueOf(lo);
-            return lo + ".." + hi;
-        }
-    }
-
-    private String nonNull(String a, String b) {
-        return a != null ? a : b;
     }
 
     private boolean associationExists(String clsA, String clsB, String roleA, String roleB) {
