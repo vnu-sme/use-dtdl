@@ -8,6 +8,8 @@ public class ASTEnumValue extends ASTSchema {
     public void prints() {
         this.printsGeneralInfo();
         System.out.println("ASTEnumValue.name: " + name);
-        value.prints();
+        if (value != null) {
+            value.prints();
+        }
     }
 }

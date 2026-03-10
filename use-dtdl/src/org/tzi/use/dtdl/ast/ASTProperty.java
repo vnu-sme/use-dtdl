@@ -22,7 +22,9 @@ public class ASTProperty extends ASTContent {
         this.printsGeneralInfo();
         System.out.println("properties.name: " + name);
         System.out.println("properties.schema: " + schema);
-        schema.prints();
+        if (schema != null) {
+            schema.prints();
+        }
         System.out.println("properties.writable: " + writable);
     }
 

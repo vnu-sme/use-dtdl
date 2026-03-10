@@ -6,6 +6,8 @@ public class ASTArray extends ASTSchema {
     @Override
     public void prints() {
         this.printsGeneralInfo();
-        elementSchema.prints();
+        if (elementSchema != null) {
+            elementSchema.prints();
+        }
     }
 }

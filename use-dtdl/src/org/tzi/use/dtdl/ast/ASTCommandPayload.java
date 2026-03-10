@@ -16,7 +16,9 @@ public class ASTCommandPayload extends ASTContent {
         System.out.println("ASTCommandPayload.name: " + name);
         System.out.println("ASTCommandPayload.nullable = " + this.nullable);
         System.out.println("ASTCommandPayload.schema = " + this.schema);
-        schema.prints();
+        if (schema != null) {
+            schema.prints();
+        }
     }
 
     public void validate(SemanticAnalyzer analyzer) {

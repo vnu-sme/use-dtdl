@@ -8,6 +8,8 @@ public class ASTMapValue extends ASTSchema {
     public void prints() {
         this.printsGeneralInfo();
         System.out.println("ASTMapValue.name: " + name);
-        schema.prints();
+        if (schema != null) {
+            schema.prints();
+        }
     }
 }

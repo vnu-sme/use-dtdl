@@ -2,6 +2,9 @@ package org.tzi.use.dtdl.gui;
 
 import org.tzi.use.api.UseModelApi;
 import org.tzi.use.dtdl.DTDLModel.DTDLModel;
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
+import org.tzi.use.dtdl.DTDLModel.Interface;
+import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
 import org.tzi.use.dtdl.ast.ASTInterface;
 import org.tzi.use.dtdl.mapping.DTDLToMModelMapper;
 import org.tzi.use.dtdl.parser.DTDLCompiler;
@@ -27,6 +30,7 @@ import java.io.PrintWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.*;
 import java.util.List;
 
 
@@ -38,8 +42,12 @@ public class DTDLForm extends JDialog {
     private final SemanticAnalyzerImpl analyzer;
     private DTDLModelRegistry sharedRegistry;
 
+    private JFileChooser chooser;
+    private File[] selectedFiles;
+    private JCheckBox multiSelectCheckbox;
+
     public DTDLForm(Session session, MainWindow parent, DTDLModelRegistry registry) {
-        super(parent, "Load DTDL File");
+        super(parent, "Load DTDL File(s)");
         this.session = session;
         this.mainWindow = parent;
         this.analyzer = new SemanticAnalyzerImpl(registry);
@@ -53,28 +61,45 @@ public class DTDLForm extends JDialog {
 
         // File input UI
         JPanel filePanel = new JPanel(new FlowLayout());
-        JLabel label = new JLabel("DTDL file:");
+        JLabel label = new JLabel("DTDL file(s):");
         filePathField = new JTextField(30);
         JButton browseButton = new JButton("Browse...");
+        multiSelectCheckbox = new JCheckBox("Select multiple files", false);
+
         filePanel.add(label);
         filePanel.add(filePathField);
         filePanel.add(browseButton);
+        filePanel.add(multiSelectCheckbox);
 
         browseButton.addActionListener(new ActionListener() {
-            private JFileChooser chooser;
-
             @Override
             public void actionPerformed(ActionEvent e) {
                 if (chooser == null) {
                     chooser = new JFileChooser(Options.getLastDirectory().toString());
-//                    chooser.setFileFilter(new ExtFileFilter("dtdl", "DTDL file"));
-                    chooser.setDialogTitle("Open DTDL file");
+                    chooser.setDialogTitle("Open DTDL file(s)");
+                    chooser.setFileFilter(new ExtFileFilter("json", "DTDL file (json)"));
                 }
+                chooser.setMultiSelectionEnabled(multiSelectCheckbox.isSelected());
                 int result = chooser.showOpenDialog(DTDLForm.this);
                 if (result == JFileChooser.APPROVE_OPTION) {
-                    File selected = chooser.getSelectedFile();
-                    filePathField.setText(selected.getAbsolutePath());
-                    Options.setLastDirectory(selected.getParentFile().toPath());
+                    if (chooser.isMultiSelectionEnabled()) {
+                        selectedFiles = chooser.getSelectedFiles();
+                        if (selectedFiles != null && selectedFiles.length > 1) {
+                            filePathField.setText(selectedFiles.length + " files selected");
+                        } else if (selectedFiles != null && selectedFiles.length == 1) {
+                            filePathField.setText(selectedFiles[0].getAbsolutePath());
+                        } else {
+                            filePathField.setText("");
+                        }
+                        if (selectedFiles != null && selectedFiles.length > 0) {
+                            Options.setLastDirectory(selectedFiles[0].getParentFile().toPath());
+                        }
+                    } else {
+                        File selected = chooser.getSelectedFile();
+                        selectedFiles = new File[]{selected};
+                        filePathField.setText(selected.getAbsolutePath());
+                        Options.setLastDirectory(selected.getParentFile().toPath());
+                    }
                 }
             }
         });
@@ -102,30 +127,56 @@ public class DTDLForm extends JDialog {
 
     private void loadDTDL() {
         MModel targetModel = null;
-        String path = filePathField.getText();
-        if (path == null || path.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please select a DTDL file first.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
+
+        // determine files to load
+        File[] filesToLoad = null;
+        if (selectedFiles != null && selectedFiles.length > 0) {
+            filesToLoad = selectedFiles;
+        } else {
+            String path = filePathField.getText();
+            if (path == null || path.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Please select a DTDL file first.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            File f = new File(path);
+            if (!f.exists()) {
+                JOptionPane.showMessageDialog(this, "Selected file does not exist.", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            filesToLoad = new File[]{f};
         }
 
-        File file = new File(path);
-        if (!file.exists()) {
-            JOptionPane.showMessageDialog(this, "Selected file does not exist.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
+        // sanity: ensure files exist
+        for (File file : filesToLoad) {
+            if (file == null || !file.exists()) {
+                JOptionPane.showMessageDialog(this, "Selected file does not exist: " + file, "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
         }
 
-
-        // 1. Parse
-        ASTInterface iface = DTDLCompiler.compileSpecification(path, logWriter);
-        if (iface == null) {
-            JOptionPane.showMessageDialog(this, "DTDL parsing failed.", "Error", JOptionPane.ERROR_MESSAGE);
-            return;
+        // 1. Parse all files into ASTInterfaces
+        List<ASTInterface> astInterfaces = new ArrayList<>();
+        for (File file : filesToLoad) {
+            ASTInterface iface = DTDLCompiler.compileSpecification(file.getAbsolutePath(), logWriter);
+            if (iface == null) {
+                JOptionPane.showMessageDialog(this, "DTDL parsing failed for file: " + file.getName(), "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            astInterfaces.add(iface);
         }
 
-        // 2. Analyze
-        DTDLModel model = analyzer.analyze(java.util.List.of(iface));
+        // 2. Analyze (multi-file) — analyzer will register all interfaces first
+        DTDLModel model = analyzer.analyze(astInterfaces);
         DTDLContext ctx = analyzer.getContext();
 
+        if (!ctx.warnings.isEmpty()) {
+            StringBuilder w = new StringBuilder("DTDL warnings:\n");
+            for (String msg : ctx.warnings) {
+                w.append("- ").append(msg).append("\n");
+            }
+            // show as info (non-blocking)
+            JOptionPane.showMessageDialog(this, w.toString(), "DTDL Warnings", JOptionPane.WARNING_MESSAGE);
+        }
 
         // 3. Handle semantic errors
         if (model == null) {
@@ -154,12 +205,9 @@ public class DTDLForm extends JDialog {
 
         DTDLModel canonical = analyzer.getRegistry().getCanonicalModel();
         System.out.println("Canonical DTDL model (all registered interfaces):" + canonical.getInterfaces().size());
-//        canonical.prints();
 
-
-        // 4.1. Ensure a System+Model exists before mapping
-        ensureSystemInitialized(file);
-
+        // 4.1. Ensure a System+Model exists before mapping (use first file for name derivation)
+        ensureSystemInitialized(filesToLoad[0]);
 
         // 5. Mapping via UseModelApi
         try {
@@ -209,8 +257,6 @@ public class DTDLForm extends JDialog {
                     mainWindow.getModelBrowser().setModel(session.system().model())
             );
 
-//            closeDialog();
-
         } catch (Exception ex) {
             ex.printStackTrace(logWriter);
             JOptionPane.showMessageDialog(
@@ -219,13 +265,13 @@ public class DTDLForm extends JDialog {
                     "Mapping Error",
                     JOptionPane.ERROR_MESSAGE
             );
+            return;
         }
 
         session.system().ensureStateLinkSetsForModel();
         session.system().state().updateDerivedValues(true);
 
-
-        // 5. Success
+        // 6. Success
         JOptionPane.showMessageDialog(
                 mainWindow,
                 "DTDL loaded and mapped successfully.\nInterfaces: " +
@@ -233,8 +279,6 @@ public class DTDLForm extends JDialog {
                 "Success",
                 JOptionPane.INFORMATION_MESSAGE
         );
-
-//        closeDialog();
     }
 
     private void closeDialog() {
