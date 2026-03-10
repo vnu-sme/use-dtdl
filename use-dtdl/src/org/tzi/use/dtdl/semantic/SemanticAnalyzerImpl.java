@@ -1,5 +1,8 @@
 package org.tzi.use.dtdl.semantic;
 
+import org.tzi.use.dtdl.DTDLModel.ContentElement;
+import org.tzi.use.dtdl.DTDLModel.Interface;
+import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
 import org.tzi.use.dtdl.ast.ASTInterface;
 import org.tzi.use.dtdl.ast.schema.ASTSchema;
 import org.tzi.use.dtdl.ast.Converter;
@@ -39,6 +42,7 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
         ctx.interfaces.clear();
         ctx.schemas.clear();
         ctx.errors.clear();
+        ctx.clearWarnings();
 
         // Phase 0: register interface ids so cross-refs can be validated during validate()
         for (ASTInterface iface : astInterfaces) {
@@ -110,7 +114,10 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
         // Phase 3: convert AST -> DTDLModel
         try {
             Converter conv = new Converter(ctx);
-            return conv.buildModel(astInterfaces);
+            DTDLModel model = conv.buildModel(astInterfaces);
+
+            detectBidirectionalRelationships(model);
+            return model;
         } catch (Exception ex) {
             ctx.report("Conversion to DTDLModel failed: " + ex.getMessage());
             return null;
@@ -241,5 +248,47 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
         visiting.remove(id);
         cache.put(id, max);
         return max;
+    }
+
+    private void detectBidirectionalRelationships(DTDLModel model) {
+        if (model == null) return;
+
+        Map<String, Interface> ifaces = model.getInterfaces();
+        Set<String> pairs = new HashSet<>();
+        Set<String> bidirCanon = new HashSet<>();
+
+        for (Interface iface : ifaces.values()) {
+            if (iface == null) continue;
+            List<ContentElement> contents = iface.getContents();
+            if (contents == null) continue;
+            for (ContentElement c : contents) {
+                if (c instanceof Relationship rel) {
+                    Interface tgt = rel.getTarget();
+                    if (tgt == null) {
+                        // unresolved target — this ideally should not happen because AST validation checks targets,
+                        // but if it does, report as error (blocking)
+                        ctx.report("Relationship '" + rel.getName() + "' in interface '" + iface.getId() + "' has unresolved target", iface.getId());
+                    } else {
+                        String key = iface.getId() + "->" + tgt.getId();
+                        String rev = tgt.getId() + "->" + iface.getId();
+
+                        if (pairs.contains(rev)) {
+                            String canon = iface.getId().compareTo(tgt.getId()) < 0
+                                    ? iface.getId() + "<->" + tgt.getId()
+                                    : tgt.getId() + "<->" + iface.getId();
+                            bidirCanon.add(canon);
+                        }
+
+                        pairs.add(key);
+                    }
+                }
+            }
+        }
+
+        if (!bidirCanon.isEmpty()) {
+            for (String p : bidirCanon) {
+                ctx.reportWarning("Bidirectional relationship detected: " + p);
+            }
+        }
     }
 }

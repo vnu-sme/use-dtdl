@@ -19,6 +19,7 @@ public final class DTDLContext {
     public final Map<String, ASTInterface> interfaces = new LinkedHashMap<>();
     public final Map<String, ASTSchema> schemas = new LinkedHashMap<>();
     public final List<SemanticError> errors = new ArrayList<>();
+    public final List<String> warnings = new ArrayList<>();
 
 //    // model-space registry (persistent across loads)
 //    // Keep set of registered model objects and a fast map interfaceId -> model
@@ -38,6 +39,12 @@ public final class DTDLContext {
     public void report(String msg) {
         errors.add(new SemanticError(msg));
     }
+
+    public void reportWarning(String msg) {
+        warnings.add(msg);
+    }
+
+    public void clearWarnings() { warnings.clear(); }
 
     public boolean hasInterface(String id) {
         if (id == null) return false;
