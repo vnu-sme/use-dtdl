@@ -6,10 +6,12 @@ public class ASTMapValue extends ASTSchema {
 
     @Override
     public void prints() {
-        this.printsGeneralInfo();
-        System.out.println("ASTMapValue.name: " + name);
+        System.out.println("      MapValue: name=" + (name == null ? "<null>" : name));
         if (schema != null) {
+            System.out.println("        schema:");
             schema.prints();
+        } else {
+            System.out.println("        schema: <none>");
         }
     }
 }

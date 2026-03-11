@@ -27,6 +27,8 @@ public class ASTEnumLiteral {
     }
 
     public void prints() {
-        System.out.println("ASTEnumLiteral.intValue = " + intValue + ", ASTEnumLiteral.stringValue = " + stringValue);
+        if (isInt()) System.out.println("        (int) " + intValue);
+        else if (isString()) System.out.println("        (string) \"" + stringValue + "\"");
+        else System.out.println("        <null-literal>");
     }
 }

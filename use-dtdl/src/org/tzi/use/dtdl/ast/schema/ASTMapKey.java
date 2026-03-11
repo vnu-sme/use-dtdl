@@ -6,11 +6,12 @@ public class ASTMapKey extends ASTSchema {
 
     @Override
     public void prints() {
-        this.printsGeneralInfo();
-        System.out.println("ASTMapKey.name: " + name);
-        System.out.println("ASTMapKey.schema: " + schema);
+        System.out.println("      MapKey: name=" + (name == null ? "<null>" : name));
         if (schema != null) {
+            System.out.println("        schema:");
             schema.prints();
+        } else {
+            System.out.println("        schema: <none>");
         }
     }
 }

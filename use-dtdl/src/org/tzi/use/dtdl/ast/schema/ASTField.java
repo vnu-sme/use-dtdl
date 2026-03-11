@@ -7,13 +7,13 @@ public class ASTField extends ASTNode {
     public ASTSchema schema;
 
     public void prints() {
+        System.out.println("    Field: " + (name == null ? "<anon>" : name));
         this.printsGeneralInfo();
-        System.out.println("ASTField.name: " + name);
-
         if (schema != null) {
+            System.out.println("      schema:");
             schema.prints();
         } else {
-            System.out.println("ASTField.schema: null");
+            System.out.println("      schema: <none>");
         }
     }
 }

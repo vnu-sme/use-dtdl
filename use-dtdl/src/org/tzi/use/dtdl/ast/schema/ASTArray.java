@@ -5,9 +5,12 @@ public class ASTArray extends ASTSchema {
 
     @Override
     public void prints() {
-        this.printsGeneralInfo();
+        System.out.println("  Array (id=" + id + ")");
         if (elementSchema != null) {
+            System.out.println("    elementSchema:");
             elementSchema.prints();
+        } else {
+            System.out.println("    elementSchema: <none>");
         }
     }
 }

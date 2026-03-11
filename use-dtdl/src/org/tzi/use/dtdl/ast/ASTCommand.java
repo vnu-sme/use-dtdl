@@ -17,14 +17,21 @@ public class ASTCommand extends ASTContent {
     }
 
     public void prints() {
+        System.out.println("=== COMMAND: " + (name == null ? "<unnamed>" : name) + "  (id=" + id + ") ===");
         this.printsGeneralInfo();
-        System.out.println("ASTCommand.name: " + name);
         if (this.request != null) {
+            System.out.println("  -- request --");
             this.request.prints();
+        } else {
+            System.out.println("  -- request: <none>");
         }
         if (this.response != null) {
+            System.out.println("  -- response --");
             this.response.prints();
+        } else {
+            System.out.println("  -- response: <none>");
         }
+        System.out.println("=== /COMMAND ===");
     }
 
     public void validate(SemanticAnalyzer analyzer) {

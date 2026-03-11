@@ -19,15 +19,17 @@ public class ASTRelationship extends ASTContent {
     }
 
     public void prints() {
+        System.out.println("=== RELATIONSHIP: " + (name == null ? "<anon>" : name) + "  (id=" + id + ") ===");
         this.printsGeneralInfo();
-        System.out.println("ASTRelationship.name: " + name);
-        System.out.println("relationships.TargetInterface: " + targetInterface);
-        System.out.println("relationships.minMultiplicity: " + minMultiplicity);
-        System.out.println("relationships.maxMultiplicity: " + maxMultiplicity);
-        System.out.println("relationships.writable: " + writable);
-        System.out.println("relationships.properties: " + properties);
-        for (ASTProperty prop : properties) {
-            prop.prints();
+        System.out.println("  targetInterface: " + (targetInterface == null ? "<null>" : targetInterface));
+        System.out.println("  multiplicity: " + minMultiplicity + " .. " + maxMultiplicity + "  writable=" + writable);
+        if (properties != null && !properties.isEmpty()) {
+            System.out.println("  properties:");
+            for (ASTProperty p : properties) {
+                if (p != null) p.prints();
+            }
+        } else {
+            System.out.println("  properties: <none>");
         }
     }
 
