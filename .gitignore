@@ -118,5 +118,6 @@ fabric.properties
 target/
 read_file.ps1
 run_use_with_plugin.ps1
+use-assembly/src/main/resources/plugins/use-dtdl-7.1.1.jar
 .gitignore
 output.txt
