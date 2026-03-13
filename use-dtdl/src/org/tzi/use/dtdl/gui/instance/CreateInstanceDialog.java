@@ -250,13 +250,18 @@ public class CreateInstanceDialog extends JDialog {
             }
         }
 
+        String srcClass = Utils.sanitize(iface.getDisplayName() != null ? iface.getDisplayName() : iface.getId());
+
         if (!comps.isEmpty()) {
             row = addSectionHeader("Components", gbc, row);
 
             for (Component c : comps) {
                 String targetIfaceId = c.getSchemaInterface() != null ? c.getSchemaInterface().getId() : null;
                 JComboBox<String> combo = createUseObjectCombo(targetIfaceId);
-                compInputs.put(c.getName(), combo);
+
+                String roleName = srcClass + "_" + Utils.sanitize(c.getName());
+
+                compInputs.put(roleName, combo);
                 row = addLabeledRow(c.getName(), combo, gbc, row);
             }
         }
@@ -265,9 +270,12 @@ public class CreateInstanceDialog extends JDialog {
             row = addSectionHeader("Relationships", gbc, row);
 
             for (Relationship r : rels) {
-                String targetIfaceId = (r.getTarget() != null ? (r.getTarget() != null ? r.getTarget().getId() : r.getTarget().toString()) : null);
+                String targetIfaceId = (r.getTarget() != null ? r.getTarget().getId() : null);
                 JComboBox<String> combo = createUseObjectCombo(targetIfaceId);
-                relInputs.put(r.getName(), combo);
+
+                String roleName = srcClass + "_" + Utils.sanitize(r.getName());
+
+                relInputs.put(roleName, combo);
                 row = addLabeledRow(r.getName(), combo, gbc, row);
             }
         }
