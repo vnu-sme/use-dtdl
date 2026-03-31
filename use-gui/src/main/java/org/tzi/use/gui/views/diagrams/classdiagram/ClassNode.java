@@ -22,6 +22,7 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.font.FontRenderContext;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
@@ -54,6 +55,17 @@ public class ClassNode extends ClassifierNode implements SortChangeListener {
     
     private final String[] fOprSignatures;
     private final Color[] fOperationColors;
+
+    // --- compact / expand controls ---
+    private static final int DEFAULT_MAX_ATTR_LINES = 6;
+    private static final int DEFAULT_MAX_OP_LINES  = 6;
+    private static final int DEFAULT_MAX_NAME_CHARS = 30;
+
+    private int maxAttributeLines = DEFAULT_MAX_ATTR_LINES;
+    private int maxOperationLines = DEFAULT_MAX_OP_LINES;
+    private int maxNameChars = DEFAULT_MAX_NAME_CHARS;
+
+    private boolean expanded = false;
     
     private Color color = null;
 
@@ -175,26 +187,33 @@ public class ClassNode extends ClassifierNode implements SortChangeListener {
         } else {
         	classNameFont = g.getFont();
         }
-        
-        FontMetrics classNameFontMetrics = g.getFontMetrics( classNameFont );
-        
-        rect.width = classNameFontMetrics.stringWidth( fLabel );
-		rect.height = classNameFontMetrics.getDescent()
-				+ classNameFontMetrics.getAscent() + (2 * VERTICAL_INDENT);
-		
-		// At least the class name should be visible
-		this.setRequiredHeight("CLASSNODE", rect.height);
-		this.setRequiredWidth("CLASSNODE", rect.width + (2 * HORIZONTAL_INDENT));
+
+        FontMetrics classNameFontMetrics = g.getFontMetrics(classNameFont);
+
+        String displayLabel = truncate(fLabel, maxNameChars);
+
+        rect.width = classNameFontMetrics.stringWidth(displayLabel);
+        rect.height = classNameFontMetrics.getDescent()
+                + classNameFontMetrics.getAscent() + (2 * VERTICAL_INDENT);
+
+        this.setRequiredHeight("CLASSNODE", rect.height);
+        this.setRequiredWidth("CLASSNODE", rect.width + (2 * HORIZONTAL_INDENT));
     }
     
     @Override
     protected void calculateAttributeRectSize(Graphics2D g, Rectangle2D.Double rect) {
-    	calculateCompartmentRectSize(g, rect, fAttrValues);
+        int visible = Math.min(fAttrValues.length, maxAttributeLines);
+        String[] limited = new String[visible];
+        System.arraycopy(fAttrValues, 0, limited, 0, visible);
+    	calculateCompartmentRectSize(g, rect, limited);
     }
     
     @Override
     protected void calculateOperationsRectSize(Graphics2D g, Rectangle2D.Double rect) {
-    	calculateCompartmentRectSize(g, rect, fOprSignatures);
+        int visible = Math.min(fOprSignatures.length, maxOperationLines);
+        String[] limited = new String[visible];
+        System.arraycopy(fOprSignatures, 0, limited, 0, visible);
+        calculateCompartmentRectSize(g, rect, limited);
     }
     
     public String ident() {
@@ -226,8 +245,9 @@ public class ClassNode extends ClassifierNode implements SortChangeListener {
         } 
         
         fm = g.getFontMetrics();
-        
-        int labelWidth = fm.stringWidth( fLabel );
+
+        String displayLabel = truncate(fLabel, maxNameChars);
+        int labelWidth = fm.stringWidth(displayLabel);
         
         if ( isSelected() ) {
             g.setColor( fOpt.getNODE_SELECTED_COLOR() );
@@ -245,7 +265,7 @@ public class ClassNode extends ClassifierNode implements SortChangeListener {
         y = (int)currentBounds.getY() + fm.getAscent() + VERTICAL_INDENT;
         g.setColor( fOpt.getNODE_LABEL_COLOR() );
         // We know that the name fits, because we require this size
-        g.drawString( fLabel, Math.round(x), y );
+        g.drawString( displayLabel, Math.round(x), y );
         
         y += VERTICAL_INDENT + fm.getDescent();
         
@@ -273,8 +293,17 @@ public class ClassNode extends ClassifierNode implements SortChangeListener {
 	        			attributeBounds.height = currentBounds.getMaxY() - y - VERTICAL_INDENT - 2*Util.getLeading(fm);
 	        		}
 	        	}
-	        	
-	            y = drawCompartment(g, y, fAttrValues, fAttrColors, attributeBounds);
+
+                int attrVisible = Math.min(fAttrValues.length, maxAttributeLines);
+                String[] attrLimited = new String[attrVisible];
+                Color[] attrLimitedColors = new Color[attrVisible];
+                if (attrVisible > 0) {
+                    System.arraycopy(fAttrValues, 0, attrLimited, 0, attrVisible);
+                    if (fAttrColors != null && fAttrColors.length > 0) {
+                        System.arraycopy(fAttrColors, 0, attrLimitedColors, 0, Math.min(fAttrColors.length, attrVisible));
+                    }
+                }
+                y = drawCompartmentLimited(g, y, attrLimited, attrLimitedColors, attributeBounds, fAttributes.size());
         	}
         }
         
@@ -283,7 +312,16 @@ public class ClassNode extends ClassifierNode implements SortChangeListener {
         	lineOpDivider.y1 = y;
         	lineOpDivider.y2 = y;
 
-            y = drawCompartment(g, y, fOprSignatures, fOperationColors, currentBounds);
+            int opVisible = Math.min(fOprSignatures.length, maxOperationLines);
+            String[] opLimited = new String[opVisible];
+            Color[] opLimitedColors = new Color[opVisible];
+            if (opVisible > 0) {
+                System.arraycopy(fOprSignatures, 0, opLimited, 0, opVisible);
+                if (fOperationColors != null && fOperationColors.length > 0) {
+                    System.arraycopy(fOperationColors, 0, opLimitedColors, 0, Math.min(fOperationColors.length, opVisible));
+                }
+            }
+            y = drawCompartmentLimited(g, y, opLimited, opLimitedColors, currentBounds, fOperations.size());
         }
         
         g.setColor( fOpt.getNODE_FRAME_COLOR() );
@@ -296,7 +334,93 @@ public class ClassNode extends ClassifierNode implements SortChangeListener {
         	g.draw(lineOpDivider);
         }
     }
-    
+
+    protected int drawCompartmentLimited(Graphics2D g, int y, String[] values, Color[] colors, Rectangle2D roundedBounds, int originalTotal) {
+        // create a clipped graphics so nothing draws outside the compartment
+        Graphics2D g2 = (Graphics2D) g.create();
+        try {
+            // compute integer clip rectangle covering the roundedBounds region
+            int clipX = (int) Math.floor(roundedBounds.getX());
+            int clipY = (int) Math.floor(roundedBounds.getY());
+            int clipW = (int) Math.ceil(roundedBounds.getWidth());
+            int clipH = (int) Math.ceil(roundedBounds.getHeight());
+            g2.setClip(clipX, clipY, clipW, clipH);
+
+            FontMetrics fm = g2.getFontMetrics();
+            int leading = Util.getLeading(fm);
+            String shortenSuffix = "...";
+            int shortensuffixLength = fm.stringWidth(shortenSuffix);
+
+            if (values.length == 0) {
+                y += 2 * leading;
+                return y;
+            }
+
+            Color orgColor;
+            int singleHeight = (int) Math.round(Util.getLineHeight(fm));
+            Rectangle2D.Double elementRect = new Rectangle2D.Double(
+                    roundedBounds.getX(), roundedBounds.getY(),
+                    roundedBounds.getWidth(), roundedBounds.getHeight());
+
+            for (int i = 0; i < values.length; ++i) {
+                y += leading / 2;
+                if (!isSelected() && colors != null && i < colors.length && colors[i] != null) {
+                    orgColor = g2.getColor();
+                    g2.setColor(colors[i]);
+                    elementRect.y = y;
+                    elementRect.height = singleHeight + leading;
+                    g2.fill(elementRect);
+                    g2.setColor(orgColor);
+                }
+
+                y += singleHeight;
+
+                String toDraw = values[i] != null ? values[i] : "";
+                double space = roundedBounds.getWidth() - (2 * HORIZONTAL_INDENT);
+
+                // measure using g2's FontRenderContext
+                double roundedRequiredSpace = Math.round(g2.getFont().getStringBounds(toDraw, g2.getFontRenderContext()).getWidth());
+
+                if (roundedRequiredSpace > space) {
+                    // shorten with suffix
+                    space -= shortensuffixLength;
+                    double usedSpace = 0;
+                    StringBuilder newToDraw = new StringBuilder();
+
+                    for (int index = 0; index < toDraw.length(); ++index) {
+                        double charWidth = fm.charWidth(toDraw.charAt(index));
+                        if (usedSpace + charWidth < space) {
+                            newToDraw.append(toDraw.charAt(index));
+                            usedSpace += charWidth;
+                        } else {
+                            break;
+                        }
+                    }
+                    newToDraw.append(shortenSuffix);
+                    toDraw = newToDraw.toString();
+                }
+
+                boolean hasMoreOriginal = originalTotal > values.length;
+                boolean isLastDisplayed = (i == values.length - 1);
+
+                if (isLastDisplayed && hasMoreOriginal) {
+                    // show ellipsis centered inside compartment
+                    this.drawTextCentered(g2, "...", roundedBounds.getX(), y - fm.getDescent(), roundedBounds.getWidth());
+                    y += leading / 2;
+                    break;
+                } else {
+                    g2.drawString(toDraw, Math.round(roundedBounds.getX() + HORIZONTAL_INDENT), y - fm.getDescent());
+                }
+
+                y += leading / 2;
+            }
+            y += leading / 2;
+            return y;
+        } finally {
+            g2.dispose();
+        }
+    }
+
     @Override
     public boolean hasAttributes() {
     	return !fAttributes.isEmpty();
@@ -315,5 +439,12 @@ public class ClassNode extends ClassifierNode implements SortChangeListener {
     @Override
     protected String getStoreType() {
     	return "Class";
+    }
+
+    private String truncate(String s, int max) {
+        if (s == null) return "";
+        if (s.length() <= max) return s;
+        if (max <= 1) return "\u2026";
+        return s.substring(0, Math.max(0, max - 1)) + "\u2026";
     }
 }

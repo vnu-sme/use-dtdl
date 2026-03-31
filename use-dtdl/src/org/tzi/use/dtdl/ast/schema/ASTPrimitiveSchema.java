@@ -3,7 +3,7 @@ package org.tzi.use.dtdl.ast.schema;
 public class ASTPrimitiveSchema extends ASTSchema {
     @Override
     public void prints() {
-        System.out.println("this is primitive schema, i dont know how to print");
+        System.out.println("    Primitive: " + kind.name().toLowerCase());
     }
 
     public enum Kind {

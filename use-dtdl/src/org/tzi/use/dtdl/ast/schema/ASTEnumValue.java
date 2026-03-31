@@ -6,10 +6,12 @@ public class ASTEnumValue extends ASTSchema {
 
     @Override
     public void prints() {
-        this.printsGeneralInfo();
-        System.out.println("ASTEnumValue.name: " + name);
+        System.out.println("    - EnumValue: name=" + (name == null ? "<null>" : name));
         if (value != null) {
+            System.out.print("      literal: ");
             value.prints();
+        } else {
+            System.out.println("      literal: <none>");
         }
     }
 }

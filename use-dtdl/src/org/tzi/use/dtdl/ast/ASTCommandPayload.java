@@ -11,13 +11,13 @@ public class ASTCommandPayload extends ASTContent {
     public ASTSchema schema;
 
     public void prints() {
-        System.out.println("START OF ASTCommandPayload: ");
+        System.out.println("  CommandPayload: " + (name == null ? "<anon>" : name) + "  (id=" + id + ") nullable=" + nullable);
         this.printsGeneralInfo();
-        System.out.println("ASTCommandPayload.name: " + name);
-        System.out.println("ASTCommandPayload.nullable = " + this.nullable);
-        System.out.println("ASTCommandPayload.schema = " + this.schema);
         if (schema != null) {
+            System.out.println("    schema:");
             schema.prints();
+        } else {
+            System.out.println("    schema: <none>");
         }
     }
 

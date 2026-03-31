@@ -37,6 +37,7 @@ public class DTDLToMModelMapper {
     private final Map<String,MClass> ifaceToClass = new LinkedHashMap<>();
     private final Map<Schema,String> schemaToTypeName = new IdentityHashMap<>();
     private final Map<String,EnumType> createdEnums = new LinkedHashMap<>();
+    private final Map<String,String> schemaKeyToTypeName = new LinkedHashMap<>();
     private final Deque<String> schemaPath = new ArrayDeque<>();
     private final PrintWriter logWriter;
 
@@ -67,11 +68,78 @@ public class DTDLToMModelMapper {
         return String.join("_", l);
     }
 
-    private void ensurePrimitiveTypes() throws UseApiException {
-        ensureDataTypeIfMissing("Integer");
-        ensureDataTypeIfMissing("Real");
-        ensureDataTypeIfMissing("String");
-        ensureDataTypeIfMissing("Boolean");
+    /**
+     * Returns the enclosing class name from the current schemaPath stack.
+     * schemaPath is filled by callers (they push classname then field names), so
+     * reversing the deque yields [class, field, ...]; we take the first element.
+     */
+    private String enclosingClassName() {
+        List<String> l = new ArrayList<>(schemaPath);
+        Collections.reverse(l);
+        if (l.isEmpty()) return "Anon";
+        // first element should be the containing class name if callers pushed it
+        return sanitize(l.get(0));
+    }
+
+    /**
+     * Compute a stable key string for a Schema so structurally-equal or named schemas
+     * produce the same key even if parsed into different objects.
+     */
+    private String schemaKey(Schema s) {
+        if (s == null) return "prim:String";
+        // Named schema -> prefer name (local schema name or id if available)
+        if (s.getClass().getSimpleName().equals("NamedSchema")) {
+            try {
+                NamedSchema ns = (NamedSchema) s;
+                String id = ns.getId();
+                if (id != null && !id.isEmpty()) return "named:" + id;
+                String nm = ns.getName();
+                if (nm != null && !nm.isEmpty()) return "named:" + nm;
+            } catch (ClassCastException ignored) {}
+        }
+
+        // Primitive
+        if (s instanceof PrimitiveType) {
+            String tn = ((PrimitiveType) s).getTypeName();
+            if (tn == null) tn = "string";
+            return "prim:" + tn.toLowerCase(Locale.ROOT);
+        }
+
+        // Enum
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum enm) {
+            StringBuilder b = new StringBuilder();
+            b.append("enum:");
+            for (EnumValue v : enm.getValues()) {
+                b.append(v == null ? "<null>" : v.getName()).append("|");
+            }
+            return b.toString();
+        }
+
+        // Object: structural key based on field names + recursive element keys
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object obj) {
+            StringBuilder b = new StringBuilder("object:");
+            for (Field f : obj.getFields()) {
+                b.append(f.getName()).append(":");
+                Schema fs = f.getSchema();
+                b.append(schemaKey(fs)).append(";");
+            }
+            return b.toString();
+        }
+
+        // Array
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Array.Array arr) {
+            return "array:" + schemaKey(arr.getElementSchema());
+        }
+
+        // Map
+        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Map.Map m) {
+            String k = m.getMapKey() != null ? schemaKey(m.getMapKey().getSchema()) : "any";
+            String v = m.getMapValue() != null ? schemaKey(m.getMapValue().getSchema()) : "any";
+            return "map:" + k + "->" + v;
+        }
+
+        // Fallback
+        return s.getClass().getSimpleName() + "@" + System.identityHashCode(s);
     }
 
     private void ensureDataTypeIfMissing(String name) throws UseApiException {
@@ -110,11 +178,17 @@ public class DTDLToMModelMapper {
             }
 
             // 3) Create deterministic fallback name (displayName + hash of dtmi for uniqueness)
-            String fallback = cname + "_" + stableHash(iface.getId(), iface);
-            if (api.getModel().getClass(fallback) == null) {
-                api.createClass(fallback, false);
+//            String fallback = cname + "_" + stableHash(iface.getId(), iface);
+//            if (api.getModel().getClass(fallback) == null) {
+//                api.createClass(fallback, false);
+//            }
+            String chosenName = cname;
+            if (api.getModel().getClass(chosenName) == null) {
+                api.createClass(chosenName, false);
             }
-            MClass chosen = api.getModel().getClass(fallback);
+
+//            MClass chosen = api.getModel().getClass(fallback);
+            MClass chosen = api.getModel().getClass(chosenName);
             ifaceToClass.put(iface.getId(), chosen);
             if (registry != null) registry.registerClassMapping(iface.getId(), chosen.name());
             if (logWriter != null) logWriter.println("[DTDL->M] created class: " + chosen.name() + " for " + iface.getId());
@@ -128,13 +202,26 @@ public class DTDLToMModelMapper {
             for (Map.Entry<String, Schema> e : iface.getSchemas().entrySet()) {
                 Schema s = e.getValue();
                 if (s instanceof org.tzi.use.dtdl.DTDLModel.NamedSchema) {
-                    // use interface display name + the local schema name
-                    String dtName = sanitize(ifaceDisplay + "_" + e.getKey());
+                    // compute canonical dtName: prefer schema id (DTMI) short segment, fall back to local schema key
+                    String dtName;
+                    if (s.getClass().getSimpleName().equals("NamedSchema")) {
+                        org.tzi.use.dtdl.DTDLModel.NamedSchema ns = (org.tzi.use.dtdl.DTDLModel.NamedSchema) s;
+                        String base = ns.getId() != null && !ns.getId().isEmpty() ? ns.getId() : e.getKey();
+                        // shorten DTMI -> take last segment after ':', replace ';' and separators
+                        int lastColon = base.lastIndexOf(':');
+                        if (lastColon != -1) base = base.substring(lastColon + 1);
+                        base = base.replace(';', '_').replace('.', '_').replace('-', '_');
+                        dtName = sanitize(ifaceDisplay + "_" + base);
+                    } else {
+                        dtName = sanitize(ifaceDisplay + "_" + e.getKey());
+                    }
                     if (dtName == null || dtName.isEmpty()) dtName = "Named";
+
                     if (api.getModel().getDataType(dtName) == null) {
                         api.createDataType(dtName, false);
                     }
                     schemaToTypeName.put(s, dtName);
+                    schemaKeyToTypeName.put(schemaKey(s), dtName);
                     if (logWriter != null) logWriter.println("[DTDL->M] created dataType for named schema: " + dtName + " (iface=" + iface.getId() + ", schemaKey=" + e.getKey() + ")");
                 }
             }
@@ -239,39 +326,54 @@ public class DTDLToMModelMapper {
                     int[] aggr = new int[] { MAggregationKind.NONE, MAggregationKind.NONE };
                     boolean[] ordered = new boolean[] { false, false };
 
-                    if (api.getModel().getAssociationClass(assocName) == null) {
-                        api.createAssociationClass(assocName, false, new String[0], classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
-                        if (logWriter != null) logWriter.println("[DTDL->M] created association class: " + assocName +
-                                " classes=" + Arrays.toString(classNames) +
-                                " roles=" + Arrays.toString(roleNames));
+                    // If no properties, creates normal association, else creates association class
+                    boolean hasProperties = r.getProperties() != null && !r.getProperties().isEmpty();
+
+                    if (hasProperties) {
+                        if (api.getModel().getAssociationClass(assocName) == null) {
+                            api.createAssociationClass(assocName, false, new String[0], classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
+                            if (logWriter != null) logWriter.println("[DTDL->M] created association class: " + assocName +
+                                    " classes=" + Arrays.toString(classNames) +
+                                    " roles=" + Arrays.toString(roleNames));
+                        } else {
+                            if (logWriter != null) logWriter.println("[DTDL->M] association class already exists: " + assocName);
+                        }
+
+                        MAssociationClass ac = api.getAssociationClass(assocName);
+                        if (ac != null && !r.getProperties().isEmpty()) {
+                            List<String> propNames = new ArrayList<>();
+                            List<String> propTypes = new ArrayList<>();
+                            for (Property rp : r.getProperties()) {
+                                if (rp.getName() == null) continue;
+                                boolean propExists = false;
+                                for (MAttribute a : ac.allAttributes()) {
+                                    if (a.name().equals(rp.getName())) { propExists = true; break; }
+                                }
+
+                                if (!propExists) {
+                                    push(cls.name());
+                                    push(r.getName());
+                                    push(rp.getName());
+                                    String ptype = mapSchemaToTypeName(rp.getSchema());
+                                    pop();
+                                    pop();
+                                    pop();
+                                    api.createAttributeEx(ac, rp.getName(), api.getType(ptype));
+                                    if (logWriter != null) logWriter.println("[DTDL->M] added assoc-class property " + rp.getName() + " to " + assocName);
+                                } else {
+                                    if (logWriter != null) logWriter.println("[DTDL->M] skipped assoc-class property (exists) " + rp.getName() + " on " + assocName);
+                                }
+                            }
+                        }
                     } else {
-                        if (logWriter != null) logWriter.println("[DTDL->M] association class already exists: " + assocName);
-                    }
-
-                    MAssociationClass ac = api.getAssociationClass(assocName);
-                    if (ac != null && !r.getProperties().isEmpty()) {
-                        List<String> propNames = new ArrayList<>();
-                        List<String> propTypes = new ArrayList<>();
-                        for (Property rp : r.getProperties()) {
-                            if (rp.getName() == null) continue;
-                            boolean propExists = false;
-                            for (MAttribute a : ac.allAttributes()) {
-                                if (a.name().equals(rp.getName())) { propExists = true; break; }
-                            }
-
-                            if (!propExists) {
-                                push(cls.name());
-                                push(r.getName());
-                                push(rp.getName());
-                                String ptype = mapSchemaToTypeName(rp.getSchema());
-                                pop();
-                                pop();
-                                pop();
-                                api.createAttributeEx(ac, rp.getName(), api.getType(ptype));
-                                if (logWriter != null) logWriter.println("[DTDL->M] added assoc-class property " + rp.getName() + " to " + assocName);
-                            } else {
-                                if (logWriter != null) logWriter.println("[DTDL->M] skipped assoc-class property (exists) " + rp.getName() + " on " + assocName);
-                            }
+                        if (api.getModel().getAssociation(assocName) == null &&
+                                api.getModel().getAssociationClass(assocName) == null) {
+                            api.createAssociation(assocName, classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
+                            if (logWriter != null) logWriter.println("[DTDL->M] created association: " + assocName +
+                                    " classes=" + Arrays.toString(classNames) +
+                                    " roles=" + Arrays.toString(roleNames));
+                        } else {
+                            if (logWriter != null) logWriter.println("[DTDL->M] association already exists: " + assocName);
                         }
                     }
                 } else if (ce instanceof Component) {
@@ -349,29 +451,70 @@ public class DTDLToMModelMapper {
     }
 
     private String mapSchemaToTypeName(Schema s) throws UseApiException {
+        // compute stable key and consult string-key cache
+        String skey = schemaKey(s);
+        if (skey != null && schemaKeyToTypeName.containsKey(skey)) {
+            String cached = schemaKeyToTypeName.get(skey);
+            // keep identity cache in sync for existing callers that use Schema instance keys
+            schemaToTypeName.put(s, cached);
+            return cached;
+        }
+
         if (s == null) return "String";
         if (schemaToTypeName.containsKey(s)) return schemaToTypeName.get(s);
         if (s instanceof PrimitiveType) {
             String tn = ((PrimitiveType) s).getTypeName();
             if (tn == null) tn = "String";
             tn = tn.toLowerCase(Locale.ROOT);
-            if (tn.contains("int") || tn.equals("integer") || tn.equals("long")) { schemaToTypeName.put(s,"Integer"); return "Integer"; }
-            if (tn.contains("float") || tn.contains("double") || tn.equals("number")) { schemaToTypeName.put(s,"Real"); return "Real"; }
-            if (tn.contains("bool")) { schemaToTypeName.put(s,"Boolean"); return "Boolean"; }
-            schemaToTypeName.put(s,"String"); return "String";
+            if (tn.contains("int") || tn.equals("integer") || tn.equals("long")) {
+                schemaToTypeName.put(s,"Integer");
+                schemaKeyToTypeName.put(skey, "Integer");
+                return "Integer";
+            }
+            if (tn.contains("float") || tn.contains("double") || tn.equals("number")) {
+                schemaToTypeName.put(s,"Real");
+                schemaKeyToTypeName.put(skey, "Real");
+                return "Real";
+            }
+            if (tn.contains("bool")) {
+                schemaToTypeName.put(s,"Boolean");
+                schemaKeyToTypeName.put(skey, "Boolean");
+                return "Boolean";
+            }
+            schemaToTypeName.put(s,"String");
+            schemaKeyToTypeName.put(skey, "String");
+            return "String";
         }
         if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object obj) {
-            String dtName = sanitize(currentPath() + "_Object");
+            // Prefer already-registered named schema mapping if present
+            String dtName;
+            if (schemaToTypeName.containsKey(s)) {
+                dtName = schemaToTypeName.get(s);
+            } else {
+                String base = enclosingClassName();
+                dtName = sanitize(base + "_Object");
+
+                 int shortHash = Math.abs(schemaKey(s).hashCode()) % 10000;
+                 dtName = sanitize(base + "_" + shortHash + "_Object");
+
+                // remember mapping so repeated occurrences reuse same type name
+                schemaToTypeName.put(s, dtName);
+                schemaKeyToTypeName.put(skey, dtName);
+            }
 
             if (api.getModel().getDataType(dtName) == null) api.createDataType(dtName, false);
-
-            schemaToTypeName.put(s, dtName);
 
             MDataType dt = api.getModel().getDataType(dtName);
             if (dt == null) throw new UseApiException("Could not obtain created data type " + dtName);
 
-            push("Object");
+            // Use the data type name as the local base path while processing fields so nested enums
+            // and inner datatypes are named under the named schema instead of under the property path.
             List<Field> fields = obj.getFields();
+
+            // save & restore schemaPath so we don't permanently lose outer context
+            Deque<String> savedPath = new ArrayDeque<>(schemaPath);
+            schemaPath.clear();
+            push(dtName);
 
             for (Field f : fields) {
                 push(f.getName());
@@ -501,7 +644,9 @@ public class DTDLToMModelMapper {
             } catch (Exception ex) {
                 throw new UseApiException("Failed to create constructor/getters for data type " + dt.name(), ex);
             } finally {
-                pop();
+                // restore previous schemaPath
+                schemaPath.clear();
+                schemaPath.addAll(savedPath);
             }
 
             return dtName;
@@ -515,17 +660,29 @@ public class DTDLToMModelMapper {
             String seqName = "Sequence(" + etn + ")";
 
             schemaToTypeName.put(s, seqName);
+            schemaKeyToTypeName.put(skey, seqName);
             return seqName;
         }
 
         if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum e) {
-            String enumName = sanitize(currentPath() + "_Enum");
+            String path = currentPath();
+            String enumName;
+            if (path == null || path.isEmpty()) {
+                enumName = sanitize(enclosingClassName() + "_Enum");
+            } else {
+                enumName = sanitize(path + "_Enum");
+            }
             schemaToTypeName.put(s, enumName);
+            schemaKeyToTypeName.put(skey, enumName);
 
             if (api.getModel().getDataType(enumName) == null) {
                 List<String> lits = new ArrayList<>();
                 for (EnumValue v : e.getValues()) {
-                    if (v.getValue() != null) lits.add(String.valueOf(v.getValue().raw()));
+                    if (v.getName() != null && !v.getName().isEmpty()) {
+                        lits.add(v.getName());
+                    } else if (v.getValue() != null) {
+                        lits.add(String.valueOf(v.getValue().raw()));
+                    }
                 }
                 EnumType et = api.createEnumeration(enumName, lits);
                 createdEnums.put(enumName, et);
@@ -534,8 +691,15 @@ public class DTDLToMModelMapper {
             return enumName;
         }
         if (s instanceof NamedSchema ns) {
-            String name = sanitize(ns.getName() != null ? ns.getName() : sanitize(currentPath() + "_Named"));
+            String name;
+            if (ns.getName() != null && !ns.getName().isEmpty()) {
+                name = sanitize(ns.getName());
+            } else {
+                // fallback to enclosing class name based short name
+                name = sanitize(enclosingClassName() + "_Named");
+            }
             schemaToTypeName.put(s, name);
+            schemaKeyToTypeName.put(skey, name);
 
             if (api.getModel().getDataType(name) == null) api.createDataType(name, false);
             return name;
@@ -545,7 +709,13 @@ public class DTDLToMModelMapper {
             Schema v = m.getMapValue() != null ? m.getMapValue().getSchema() : null;
 
             // create an entry datatype for map entries
-            String entryDtName = sanitize(currentPath() + "_MapEntry");
+            String path = currentPath();
+            String entryDtName;
+            if (path == null || path.isEmpty()) {
+                entryDtName = sanitize(enclosingClassName() + "_MapEntry");
+            } else {
+                entryDtName = sanitize(path + "_MapEntry");
+            }
             if (entryDtName == null || entryDtName.isEmpty()) entryDtName = "MapEntry";
 
             if (api.getModel().getDataType(entryDtName) == null) {
@@ -571,10 +741,12 @@ public class DTDLToMModelMapper {
             // represent map as a sequence of entry datatypes
             String seqName = "Sequence(" + entryDtName + ")";
             schemaToTypeName.put(s, seqName);
+            schemaKeyToTypeName.put(skey, seqName);
             return seqName;
         }
 
         schemaToTypeName.put(s, "String");
+        schemaKeyToTypeName.put(skey, "String");
         return "String";
     }
 

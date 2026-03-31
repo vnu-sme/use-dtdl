@@ -8,6 +8,10 @@ public class ASTProperty extends ASTContent {
     public ASTSchema schema;
     public boolean writable;
 
+    public java.util.List<String> semanticTypes;
+    public String semanticTypePrimary;
+    public String unit;
+
     public ASTProperty() {
         this.schema = null;
         this.writable = false;
@@ -19,13 +23,23 @@ public class ASTProperty extends ASTContent {
     }
 
     public void prints() {
+        System.out.println("  Property: " + (name == null ? "<anon>" : name) + "  (id=" + id + ")");
         this.printsGeneralInfo();
-        System.out.println("properties.name: " + name);
-        System.out.println("properties.schema: " + schema);
+        System.out.println("    writable: " + writable);
         if (schema != null) {
+            System.out.println("    schema:");
             schema.prints();
+        } else {
+            System.out.println("    schema: <none>");
         }
-        System.out.println("properties.writable: " + writable);
+
+        System.out.println("    unit: " + unit);
+        if (semanticTypePrimary != null) {
+            System.out.println("    semanticTypePrimary: " + semanticTypePrimary);
+        }
+        if (semanticTypes != null && !semanticTypes.isEmpty()) {
+            System.out.println("    semanticTypes: " + semanticTypes);
+        }
     }
 
     public void validate(SemanticAnalyzer analyzer) {

@@ -110,83 +110,6 @@ interfaceField[ASTInterface iface]
       }
     ;
 
-contentObject returns [ASTContent n]
-@init { $n = null; }
-    :
-      LBRACE
-        (
-          typePairContent
-          {
-            switch ($typePairContent.t) {
-              case "Telemetry":    $n = new ASTTelemetry(); break;
-              case "Property":     $n = new ASTProperty(); break;
-              case "Relationship": $n = new ASTRelationship(); break;
-              case "Command":      $n = new ASTCommand(); break;
-              case "Component":    $n = new ASTComponent(); break;
-              default:             $n = new ASTContent() {}; // payload, request, response
-            }
-            $n.semanticType = $typePairContent.t;
-          }
-        )?
-        {
-          if ($n == null) $n = new ASTContent() {};
-        }
-        genericPairs[$n]?
-      RBRACE
-    ;
-
-/* =======================
-   OBJECT PLACEHOLDERS
-=======================*/
-
-typePairContent returns [String t]
-    :
-      key=STRING COLON val=STRING
-      {
-        if (!stripQuotes($key.text).equals("@type")) {
-            throw new RuntimeException("Expected @type");
-        }
-        $t = stripQuotes($val.text);
-      }
-    ;
-
-genericPairs[ASTContent n]
-    :
-      genericPair[n] (COMMA genericPair[n])*
-    ;
-
-genericPair[ASTContent n]
-    :
-      keyTok=STRING COLON value
-      {
-        String key = stripQuotes($keyTok.text);
-
-        Object valObj = null;
-        if ($value.obj != null) valObj = $value.obj;
-        else if ($value.schema != null) valObj = $value.schema;
-        else if ($value.text != null) valObj = $value.text;
-
-        n.props.put(key, valObj);
-
-        // normalize localizable strings for displayName/description to String (prefer "en")
-        if ("displayName".equals(key) && valObj instanceof java.util.Map<?,?>) {
-            String picked = pickLangString((java.util.Map<?,?>) valObj);
-            if (picked != null) {
-                n.props.put(key, picked);
-            }
-        } else if ("description".equals(key) && valObj instanceof java.util.Map<?,?>) {
-            String picked = pickLangString((java.util.Map<?,?>) valObj);
-            if (picked != null) {
-                n.props.put(key, picked);
-            }
-        }
-
-        if ("name".equals(key) && valObj instanceof String) {
-            n.name = (String)valObj;
-        }
-      }
-    ;
-
 /* =======================
    VALUES
 ======================= */
@@ -273,100 +196,85 @@ jsonObjectValue returns [ASTSchema schema, Object obj]
         java.util.Map<String,Object> m = $o.map;
 
         // If there is an @type, inspect it to decide whether this is a schema object or a DTDL content object.
-        if (m.containsKey("@type") && m.get("@type") instanceof String) {
-            String t = (String) m.get("@type");
+        // Accept either a String or a List of Strings for @type (e.g. ["Property","Density"])
+        if (m.containsKey("@type")) {
+            Object typeField = m.get("@type");
+            String primaryType = null;
+            java.util.List<String> typeList = null;
 
-            // Schema types we care about now
-            if ("Enum".equals(t) || "Object".equals(t) || "Map".equals(t)) {
-                ASTSchema s;
-                switch (t) {
-                    case "Enum": s = new ASTEnum(); break;
-                    case "Object": s = new ASTObject(); break;
-                    case "Map": s = new ASTMap(); break;
-                    default: s = null; break;
+            if (typeField instanceof String) {
+                primaryType = (String) typeField;
+            } else if (typeField instanceof java.util.List<?>) {
+                typeList = new java.util.ArrayList<>();
+                for (Object it : (java.util.List<?>) typeField) {
+                    if (it instanceof String) typeList.add((String) it);
                 }
-                if (s != null) {
-                    // store all raw props for resolver to interpret later (fields, enumValues, mapKey/mapValue...)
-                    s.props.putAll(m);
-                    $schema = s;
-                    $obj = s;
-                } else {
-                    // fallback to raw map
+                if (!typeList.isEmpty()) primaryType = typeList.get(0);
+            }
+
+            if (primaryType != null) {
+                // Schema types we care about now
+                if ("Enum".equals(primaryType) || "Object".equals(primaryType) || "Map".equals(primaryType)) {
+                    ASTSchema s;
+                    switch (primaryType) {
+                        case "Enum": s = new ASTEnum(); break;
+                        case "Object": s = new ASTObject(); break;
+                        case "Map": s = new ASTMap(); break;
+                        default: s = null; break;
+                    }
+                    if (s != null) {
+                        // store all raw props for resolver to interpret later (fields, enumValues, mapKey/mapValue...)
+                        s.props.putAll(m);
+                        $schema = s;
+                        $obj = s;
+                    } else {
+                        // fallback to raw map
+                        $obj = m;
+                    }
+                }
+                // DTDL "content" objects (Property, Telemetry, Command, Relationship, Component)
+                else if ("Property".equals(primaryType) || "Telemetry".equals(primaryType)
+                         || "Command".equals(primaryType) || "Relationship".equals(primaryType)
+                         || "Component".equals(primaryType)) {
+
+                    ASTContent c;
+                    switch (primaryType) {
+                        case "Property": c = new ASTProperty(); break;
+                        case "Telemetry": c = new ASTTelemetry(); break;
+                        case "Command": c = new ASTCommand(); break;
+                        case "Relationship": c = new ASTRelationship(); break;
+                        case "Component": c = new ASTComponent(); break;
+                        default: c = new ASTContent() {}; break;
+                    }
+
+                    c.semanticType = primaryType;
+                    c.props.putAll(m);
+
+                    // if @type was an array, keep the extra semantic types as metadata
+                    if (typeList != null && typeList.size() > 1) {
+                        java.util.List<String> extras = new java.util.ArrayList<>(typeList.subList(1, typeList.size()));
+                        c.props.put("semanticTypes", extras);             // e.g. ["Density", ...]
+                        // convenience: also expose the first extra (if any) as 'semanticType' prop
+                        c.props.put("semanticType", extras.get(0));
+                    }
+
+                    // also pick up 'name' into c.name (parity with genericPair handling)
+                    Object nm = m.get("name");
+                    if (nm instanceof String) c.name = (String) nm;
+
+                    $obj = c;
+                }
+                else {
+                    // unknown @type — keep as raw map (resolver can decide)
                     $obj = m;
                 }
-            }
-            // DTDL "content" objects (Property, Telemetry, Command, Relationship, Component)
-            else if ("Property".equals(t) || "Telemetry".equals(t) || "Command".equals(t)
-                     || "Relationship".equals(t) || "Component".equals(t)) {
-                ASTContent c;
-                switch (t) {
-                    case "Property": c = new ASTProperty(); break;
-                    case "Telemetry": c = new ASTTelemetry(); break;
-                    case "Command": c = new ASTCommand(); break;
-                    case "Relationship": c = new ASTRelationship(); break;
-                    case "Component": c = new ASTComponent(); break;
-                    default: c = new ASTContent() {}; break;
-                }
-                c.semanticType = t;
-                // copy parsed map into props (values already converted by 'value' rule)
-                c.props.putAll(m);
-                // also set name if present to keep parity with genericPair handling
-                Object nm = m.get("name");
-                if (nm instanceof String) c.name = (String) nm;
-
-                $obj = c;
-            }
-            else {
-                // unknown @type — keep as raw map (resolver can decide)
+            } else {
+                // couldn't derive a string primary type -> keep raw map
                 $obj = m;
             }
         } else {
             // plain object without @type → return raw map
             $obj = m;
-        }
-      }
-    ;
-
-
-/* =======================
-   SCHEMA PAIRS
-======================= */
-
-typePairSchema returns [String t]
-    : key=STRING COLON val=STRING
-      {
-        if (!stripQuotes($key.text).equals("@type"))
-            throw new RuntimeException("Expected @type");
-        $t = stripQuotes($val.text);
-      }
-    ;
-
-schemaPairs[ASTSchema s]
-    : schemaPair[s] (COMMA schemaPair[s])*
-    ;
-
-schemaPair[ASTSchema s]
-    : STRING COLON value
-      {
-        String k = stripQuotes($STRING.text);
-
-        // enumValues: value.obj should be a List of ASTEnumValue (or raw list to be converted by resolver)
-        if (s instanceof ASTEnum && k.equals("enumValues")) {
-            if ($value.obj instanceof java.util.List<?>) {
-                ((ASTEnum)s).enumValues = (java.util.List<ASTEnumValue>) $value.obj;
-            }
-        }
-        // fields: value.obj should be a List of ASTField (or raw list to be converted by resolver)
-        else if (s instanceof ASTObject && k.equals("fields")) {
-            if ($value.obj instanceof java.util.List<?>) {
-                ((ASTObject)s).fields = (java.util.List<ASTField>) $value.obj;
-            }
-        }
-        // mapKey / mapValue: store raw object list or object for resolver later
-        else if (s instanceof ASTMap && (k.equals("mapKey") || k.equals("mapValue"))) {
-            // store the raw parsed object in a map on the schema for later resolution
-            // (requires ASTSchema to have a 'props' Map<String,Object>)
-            s.props.put(k, $value.obj);
         }
       }
     ;

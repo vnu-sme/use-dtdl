@@ -75,48 +75,41 @@ public class ASTInterface extends ASTNode {
     }
 
     public void printsAll() {
-        System.out.println("ASTInterface");
-        System.out.println("context:" + context);
-        System.out.println("displayName: " + displayName);
-        System.out.println("extendsInterfaces: " + extendsInterfaces);
-        System.out.println("description: " + description);
-        System.out.println("id: " + id);
-
-        System.out.println("===============BEGIN OF INTERFACE SCHEMAS====================:");
-        for (ASTSchema s : schemas) {
-            System.out.println("  " + s);
-            s.prints();
+        System.out.println("=== INTERFACE: " + (displayName == null ? "(no displayName)" : displayName)
+                + "  (id=" + id + ") ===");
+        System.out.println("context: " + (context == null ? "<none>" : context));
+        System.out.println("description: " + (description == null ? "<none>" : description));
+        System.out.println("extends: " + (extendsInterfaces == null ? "[]" : extendsInterfaces));
+        System.out.println("--- Schemas ---");
+        if (schemas == null || schemas.isEmpty()) {
+            System.out.println("  <none>");
+        } else {
+            for (ASTSchema s : schemas) {
+                System.out.println("  - " + (s == null ? "<null>" : s.getClass().getSimpleName() + " id=" + s.id));
+                if (s != null) s.prints();
+            }
         }
+        System.out.println("--- Relationships ---");
+        if (relationships.isEmpty()) System.out.println("  <none>");
+        else for (ASTRelationship r : relationships) r.prints();
 
-        System.out.println("===============BEGIN OF RELATIONSHIPS====================:");
-        for (ASTRelationship r : relationships) {
-            System.out.println("  " + r);
-            r.prints();
-        }
+        System.out.println("--- Properties ---");
+        if (properties.isEmpty()) System.out.println("  <none>");
+        else for (ASTProperty p : properties) p.prints();
 
-        System.out.println("===============BEGIN OF PROPERTIES=====================:");
-        for (ASTProperty p : properties) {
-            System.out.println("  " + p);
-            p.prints();
-        }
+        System.out.println("--- Commands ---");
+        if (commands.isEmpty()) System.out.println("  <none>");
+        else for (ASTCommand c : commands) c.prints();
 
-        System.out.println("===============BEGIN OF COMMANDS====================:");
-        for (ASTCommand c : commands) {
-            System.out.println("  " + c);
-            c.prints();
-        }
+        System.out.println("--- Components ---");
+        if (components.isEmpty()) System.out.println("  <none>");
+        else for (ASTComponent c : components) c.prints();
 
-        System.out.println("===============BEGIN OF COMPONENTS====================:");
-        for (ASTComponent c : components) {
-            System.out.println("  " + c);
-            c.prints();
-        }
+        System.out.println("--- Telemetries ---");
+        if (telemetries.isEmpty()) System.out.println("  <none>");
+        else for (ASTTelemetry t : telemetries) t.prints();
 
-        System.out.println("===============BEGIN OF TELEMETRIES====================:");
-        for (ASTTelemetry t : telemetries) {
-            System.out.println("  " + t);
-            t.prints();
-        }
+        System.out.println("=== /INTERFACE ===");
     }
 
     public void resolveAll() {
@@ -221,6 +214,29 @@ public class ASTInterface extends ASTNode {
 
         p.schema = resolveSchemaFromProps(p.props.get("schema"));
 
+        // extract semantic-type metadata (may have been parsed from @type array)
+        Object semListObj = p.props.get("semanticTypes");
+        if (semListObj instanceof java.util.List<?>) {
+            p.semanticTypes = new java.util.ArrayList<>();
+            for (Object it : (java.util.List<?>) semListObj) {
+                if (it instanceof String s) p.semanticTypes.add(s);
+            }
+            if (!p.semanticTypes.isEmpty()) {
+                p.semanticTypePrimary = p.semanticTypes.get(0);
+            }
+        } else {
+            Object semObj = p.props.get("semanticType");
+            if (semObj instanceof String) {
+                p.semanticTypes = new java.util.ArrayList<>();
+                p.semanticTypes.add((String) semObj);
+                p.semanticTypePrimary = (String) semObj;
+            }
+        }
+
+        // extract unit metadata if present
+        Object u = p.props.get("unit");
+        if (u instanceof String) p.unit = (String) u;
+
         Object w = p.props.get("writable");
         if (w instanceof Boolean)
             p.writable = (Boolean) w;
@@ -231,6 +247,29 @@ public class ASTInterface extends ASTNode {
         resolveGeneralInfo(t);
 
         t.schema = resolveSchemaFromProps(t.props.get("schema"));
+
+        // extract semantic-type metadata (may have been parsed from @type array)
+        Object semListObj = t.props.get("semanticTypes");
+        if (semListObj instanceof java.util.List<?>) {
+            t.semanticTypes = new java.util.ArrayList<>();
+            for (Object it : (java.util.List<?>) semListObj) {
+                if (it instanceof String s) t.semanticTypes.add(s);
+            }
+            if (!t.semanticTypes.isEmpty()) {
+                t.semanticTypePrimary = t.semanticTypes.get(0);
+            }
+        } else {
+            Object semObj = t.props.get("semanticType");
+            if (semObj instanceof String) {
+                t.semanticTypes = new java.util.ArrayList<>();
+                t.semanticTypes.add((String) semObj);
+                t.semanticTypePrimary = (String) semObj;
+            }
+        }
+
+        // extract unit metadata if present
+        Object u = t.props.get("unit");
+        if (u instanceof String) t.unit = (String) u;
     }
 
     void resolveCommand(ASTCommand c) {
@@ -468,19 +507,60 @@ public class ASTInterface extends ASTNode {
     }
 
     void resolveGeneralInfo(ASTContent n) {
-        n.id = (String) n.props.get("@id");
-        n.type = (String) n.props.get("@type");
-        n.comment = (String) n.props.get("comment");
-        n.description = (String) n.props.get("description");
-        n.displayName = (String) n.props.get("displayName");
+        Object idv = n.props.get("@id");
+        n.id = idv instanceof String ? (String) idv : null;
+
+        // @type may be a String or a List<String> (from grammar).
+        Object tv = n.props.get("@type");
+        if (tv instanceof String) {
+            n.type = (String) tv;
+        } else if (tv instanceof java.util.List<?>) {
+            // pick first string element if available
+            String picked = null;
+            for (Object it : (java.util.List<?>) tv) {
+                if (it instanceof String) { picked = (String) it; break; }
+            }
+            n.type = picked;
+        } else {
+            n.type = null;
+        }
+
+        Object cv = n.props.get("comment");
+        n.comment = cv instanceof String ? (String) cv : null;
+
+        Object dv = n.props.get("description");
+        n.description = dv instanceof String ? (String) dv : null;
+
+        Object dn = n.props.get("displayName");
+        n.displayName = dn instanceof String ? (String) dn : null;
     }
 
     void resolveGeneralInfo(ASTSchema n) {
-        n.id = (String) n.props.get("@id");
-        n.type = (String) n.props.get("@type");
-        n.comment = (String) n.props.get("comment");
-        n.description = (String) n.props.get("description");
-        n.displayName = (String) n.props.get("displayName");
+        Object idv = n.props.get("@id");
+        n.id = idv instanceof String ? (String) idv : null;
+
+        // Schema @type could also be a list in some inputs — handle safely
+        Object tv = n.props.get("@type");
+        if (tv instanceof String) {
+            n.type = (String) tv;
+        } else if (tv instanceof java.util.List<?>) {
+            String picked = null;
+            for (Object it : (java.util.List<?>) tv) {
+                if (it instanceof String) { picked = (String) it; break; }
+            }
+            n.type = picked;
+        } else {
+            n.type = null;
+        }
+
+        Object cv = n.props.get("comment");
+        n.comment = cv instanceof String ? (String) cv : null;
+
+        Object dv = n.props.get("description");
+        n.description = dv instanceof String ? (String) dv : null;
+
+        Object dn = n.props.get("displayName");
+        n.displayName = dn instanceof String ? (String) dn : null;
     }
 
     public void validate(SemanticAnalyzer analyzer) {

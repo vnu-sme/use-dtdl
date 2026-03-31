@@ -8,10 +8,14 @@ public abstract class ASTNode {
     protected String displayName;
 
     protected void printsGeneralInfo() {
-        System.out.println("ASTNode.displayName: " + displayName);
-        System.out.println("ASTNode.id: " + id);
-        System.out.println("ASTNode.description: " + description);
-        System.out.println("ASTNode.comment: " + comment);
-        System.out.println("ASTNode.type: " + type);
+        System.out.println("  id=" + (id == null ? "<null>" : id)
+                + ", type=" + (type == null ? "<null>" : type)
+                + ", displayName=" + (displayName == null ? "<null>" : displayName));
+        if (description != null && !description.isBlank()) {
+            System.out.println("    description: " + description);
+        }
+        if (comment != null && !comment.isBlank()) {
+            System.out.println("    comment: " + comment);
+        }
     }
 }

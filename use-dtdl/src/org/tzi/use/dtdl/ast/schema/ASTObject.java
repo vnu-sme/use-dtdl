@@ -7,10 +7,14 @@ public class ASTObject extends ASTSchema {
 
     @Override
     public void prints() {
-        this.printsGeneralInfo();
-
-        for (ASTField field : fields) {
-            field.prints();
+        System.out.println("  Object (id=" + id + ", displayName=" + (displayName == null ? "<none>" : displayName) + ")");
+        if (fields == null || fields.isEmpty()) {
+            System.out.println("    fields: <none>");
+        } else {
+            System.out.println("    fields:");
+            for (ASTField f : fields) {
+                if (f != null) f.prints();
+            }
         }
     }
 }

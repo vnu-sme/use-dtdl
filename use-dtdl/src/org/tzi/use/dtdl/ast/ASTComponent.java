@@ -7,7 +7,11 @@ import org.tzi.use.dtdl.semantic.SemanticAnalyzer;
 public class ASTComponent extends ASTContent {
     public String schemaInterface; // already present
 
-    public void prints() { this.printsGeneralInfo(); System.out.println("components.schemaInterface: " + schemaInterface); }
+    public void prints() {
+        System.out.println("=== COMPONENT: " + (name == null ? "<unnamed>" : name) + "  (id=" + id + ") ===");
+        this.printsGeneralInfo();
+        System.out.println("  schemaInterface: " + (schemaInterface == null ? "<null>" : schemaInterface));
+    }
 
     public void validate(SemanticAnalyzer analyzer) {
         DTDLContext ctx = analyzer.getContext();

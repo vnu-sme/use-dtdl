@@ -8,10 +8,20 @@ public class ASTEnum extends ASTSchema {
 
     @Override
     public void prints() {
-        this.printsGeneralInfo();
-        System.out.println("ASTEnum.ASTPrimitiveSchema: " + valueSchema);
-        for (ASTEnumValue enumValue : enumValues) {
-            enumValue.prints();
+        System.out.println("  Enum (id=" + id + ", displayName=" + (displayName == null ? "<none>" : displayName) + ")");
+        if (valueSchema != null) {
+            System.out.print("    valueSchema: ");
+            valueSchema.prints();
+        } else {
+            System.out.println("    valueSchema: <none>");
+        }
+        if (enumValues == null || enumValues.isEmpty()) {
+            System.out.println("    enumValues: <none>");
+        } else {
+            System.out.println("    enumValues:");
+            for (ASTEnumValue v : enumValues) {
+                if (v != null) v.prints();
+            }
         }
     }
 }

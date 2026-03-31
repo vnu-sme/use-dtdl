@@ -6,12 +6,18 @@ public class ASTMap extends ASTSchema {
 
     @Override
     public void prints() {
-        this.printsGeneralInfo();
-        if (this.mapKey != null) {
+        System.out.println("  Map (id=" + id + ")");
+        if (mapKey != null) {
+            System.out.println("    key:");
             mapKey.prints();
+        } else {
+            System.out.println("    key: <none>");
         }
-        if (this.mapValue != null) {
+        if (mapValue != null) {
+            System.out.println("    value:");
             mapValue.prints();
+        } else {
+            System.out.println("    value: <none>");
         }
     }
 }
