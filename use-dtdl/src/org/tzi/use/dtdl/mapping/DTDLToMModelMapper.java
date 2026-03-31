@@ -326,39 +326,54 @@ public class DTDLToMModelMapper {
                     int[] aggr = new int[] { MAggregationKind.NONE, MAggregationKind.NONE };
                     boolean[] ordered = new boolean[] { false, false };
 
-                    if (api.getModel().getAssociationClass(assocName) == null) {
-                        api.createAssociationClass(assocName, false, new String[0], classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
-                        if (logWriter != null) logWriter.println("[DTDL->M] created association class: " + assocName +
-                                " classes=" + Arrays.toString(classNames) +
-                                " roles=" + Arrays.toString(roleNames));
+                    // If no properties, creates normal association, else creates association class
+                    boolean hasProperties = r.getProperties() != null && !r.getProperties().isEmpty();
+
+                    if (hasProperties) {
+                        if (api.getModel().getAssociationClass(assocName) == null) {
+                            api.createAssociationClass(assocName, false, new String[0], classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
+                            if (logWriter != null) logWriter.println("[DTDL->M] created association class: " + assocName +
+                                    " classes=" + Arrays.toString(classNames) +
+                                    " roles=" + Arrays.toString(roleNames));
+                        } else {
+                            if (logWriter != null) logWriter.println("[DTDL->M] association class already exists: " + assocName);
+                        }
+
+                        MAssociationClass ac = api.getAssociationClass(assocName);
+                        if (ac != null && !r.getProperties().isEmpty()) {
+                            List<String> propNames = new ArrayList<>();
+                            List<String> propTypes = new ArrayList<>();
+                            for (Property rp : r.getProperties()) {
+                                if (rp.getName() == null) continue;
+                                boolean propExists = false;
+                                for (MAttribute a : ac.allAttributes()) {
+                                    if (a.name().equals(rp.getName())) { propExists = true; break; }
+                                }
+
+                                if (!propExists) {
+                                    push(cls.name());
+                                    push(r.getName());
+                                    push(rp.getName());
+                                    String ptype = mapSchemaToTypeName(rp.getSchema());
+                                    pop();
+                                    pop();
+                                    pop();
+                                    api.createAttributeEx(ac, rp.getName(), api.getType(ptype));
+                                    if (logWriter != null) logWriter.println("[DTDL->M] added assoc-class property " + rp.getName() + " to " + assocName);
+                                } else {
+                                    if (logWriter != null) logWriter.println("[DTDL->M] skipped assoc-class property (exists) " + rp.getName() + " on " + assocName);
+                                }
+                            }
+                        }
                     } else {
-                        if (logWriter != null) logWriter.println("[DTDL->M] association class already exists: " + assocName);
-                    }
-
-                    MAssociationClass ac = api.getAssociationClass(assocName);
-                    if (ac != null && !r.getProperties().isEmpty()) {
-                        List<String> propNames = new ArrayList<>();
-                        List<String> propTypes = new ArrayList<>();
-                        for (Property rp : r.getProperties()) {
-                            if (rp.getName() == null) continue;
-                            boolean propExists = false;
-                            for (MAttribute a : ac.allAttributes()) {
-                                if (a.name().equals(rp.getName())) { propExists = true; break; }
-                            }
-
-                            if (!propExists) {
-                                push(cls.name());
-                                push(r.getName());
-                                push(rp.getName());
-                                String ptype = mapSchemaToTypeName(rp.getSchema());
-                                pop();
-                                pop();
-                                pop();
-                                api.createAttributeEx(ac, rp.getName(), api.getType(ptype));
-                                if (logWriter != null) logWriter.println("[DTDL->M] added assoc-class property " + rp.getName() + " to " + assocName);
-                            } else {
-                                if (logWriter != null) logWriter.println("[DTDL->M] skipped assoc-class property (exists) " + rp.getName() + " on " + assocName);
-                            }
+                        if (api.getModel().getAssociation(assocName) == null &&
+                                api.getModel().getAssociationClass(assocName) == null) {
+                            api.createAssociation(assocName, classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
+                            if (logWriter != null) logWriter.println("[DTDL->M] created association: " + assocName +
+                                    " classes=" + Arrays.toString(classNames) +
+                                    " roles=" + Arrays.toString(roleNames));
+                        } else {
+                            if (logWriter != null) logWriter.println("[DTDL->M] association already exists: " + assocName);
                         }
                     }
                 } else if (ce instanceof Component) {
