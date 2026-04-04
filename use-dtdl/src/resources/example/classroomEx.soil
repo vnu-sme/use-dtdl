@@ -1,0 +1,38 @@
+-- Create Classroom
+!create c1 : Classroom
+!set c1.capacity := 40
+!set c1.occupied := false
+!set c1.roomType := #lectureHall
+
+-- Create Air Conditioners
+!create ac1 : Air_Conditioner
+!set ac1.onOff := true
+!set ac1.fanSpeed := #medium
+!set ac1.targetTemperature := 24.0
+
+!create ac2 : Air_Conditioner
+!set ac2.onOff := false
+!set ac2.fanSpeed := #low
+!set ac2.targetTemperature := 26.0
+
+-- Link Classroom with Air Conditioners (composition)
+!insert (c1, ac1) into Classroom_comp_airConditioner
+!insert (c1, ac2) into Classroom_comp_airConditioner
+
+-- Create Fire Sprinkler Heads
+!create fs1 : Fire_Sprinkler_Head
+!set fs1.onOff := true
+!set fs1.waterPressure := 2.5
+
+!create fs2 : Fire_Sprinkler_Head
+!set fs2.onOff := false
+!set fs2.waterPressure := 1.8
+
+-- Association class instances (with attributes)
+!insert (c1, fs1) into Classroom_hasFireSprinkler_Fire_Sprinkler_Head
+!set (c1, fs1).coverageRadius := 5.0
+!set (c1, fs1).lastInspectionDate := '2026-01-01'
+
+!insert (c1, fs2) into Classroom_hasFireSprinkler_Fire_Sprinkler_Head
+!set (c1, fs2).coverageRadius := 4.5
+!set (c1, fs2).lastInspectionDate := '2026-02-15'

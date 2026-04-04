@@ -57,5 +57,14 @@
                 tooltip="Integrate OCL for behavior"
                 id="org.tzi.use.dtdl.actions.MergeOclIntoModelAction">
         </action>
+        <action
+                label="Monitor telemetry flow"
+                class="org.tzi.use.dtdl.actions.OpenTelemetryMonitorAction"
+                menu="use-dtdl"
+                menuitem="Monitor telemetry flow"
+                toolbaritem="Monitor telemetry flow"
+                tooltip="Monitor telemetry flow"
+                id="org.tzi.use.dtdl.actions.OpenTelemetryMonitorAction">
+        </action>
     </actions>
 </plugin>
