@@ -155,7 +155,7 @@ public final class TelemetryEngine implements AutoCloseable {
             }
         });
 
-        publishUiRecord(new TelemetryUiRecord(Instant.now(), null, null, adapter.id(), null,
+        publishUiRecord(new TelemetryUiRecord(Instant.now(), null, null, resolveAdapterName(adapter.id()), null,
                 null, "RUNNING", null, null, null, null,
                 "Adapter attached", null, List.of()));
     }
@@ -166,7 +166,7 @@ public final class TelemetryEngine implements AutoCloseable {
         if (a != null) {
             try {
                 a.close();
-                publishUiRecord(new TelemetryUiRecord(Instant.now(), null, null, adapterId, null,
+                publishUiRecord(new TelemetryUiRecord(Instant.now(), null, null, resolveAdapterName(adapterId), null,
                         null, "STOPPED", null, null, null, null,
                         "Adapter detached", null, List.of()));
             } catch (Throwable t) {
@@ -177,6 +177,33 @@ public final class TelemetryEngine implements AutoCloseable {
 
     public TelemetryAdapter adapter(String id) {
         return adapters.get(id);
+    }
+
+    private String resolveAdapterName(String adapterId) {
+        if (adapterId == null) {
+            return "";
+        }
+
+        TelemetryAdapter adapter = adapters.get(adapterId);
+        if (adapter == null) {
+            return adapterId;
+        }
+
+        return getAdapterDeviceId(adapter);
+    }
+
+    public String getAdapterDeviceId(TelemetryAdapter adapter) {
+        if (adapter == null) {
+            return "";
+        }
+
+        if (adapter instanceof HttpPollingAdapter http) {
+            if (http.deviceId() != null && !http.deviceId().isBlank()) {
+                return http.deviceId();
+            }
+        }
+
+        return adapter.id();
     }
 
     public void addListener(TelemetryEventListener l) {
@@ -248,7 +275,7 @@ public final class TelemetryEngine implements AutoCloseable {
                 Instant.now(),
                 ev == null ? null : ev.dtmi,
                 fact == null ? null : fact.interfaceId,
-                ev == null ? null : ev.source,
+                resolveAdapterName(ev == null ? null : ev.source),
                 fact == null ? (ev == null ? null : ev.objectName) : fact.matchedObjectName,
                 fact == null ? null : fact.telemetryName,
                 status,

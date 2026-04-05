@@ -94,7 +94,29 @@ public final class TelemetryMonitorView extends JPanel implements View, Telemetr
         split.setDividerLocation(360);
         add(split, BorderLayout.CENTER);
 
-        table.getSelectionModel().addListSelectionListener(this::onSelectionChanged);
+        table.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                int viewRow = table.rowAtPoint(e.getPoint());
+                int viewCol = table.columnAtPoint(e.getPoint());
+                if (viewRow < 0 || viewCol < 0) {
+                    return;
+                }
+
+                int modelRow = table.convertRowIndexToModel(viewRow);
+                int modelCol = table.convertColumnIndexToModel(viewCol);
+                if (modelRow < 0 || modelRow >= records.size()) {
+                    return;
+                }
+
+                TelemetryUiRecord r = records.get(modelRow);
+                String columnName = table.getColumnName(viewCol);
+                String value = getClickedCellValue(r, modelCol);
+
+                detailsArea.setText(columnName + ": " + (value == null ? "" : value));
+                detailsArea.setCaretPosition(0);
+            }
+        });
 
         refreshButton.addActionListener(e -> reloadHistory());
         clearButton.addActionListener(e -> {
@@ -131,7 +153,7 @@ public final class TelemetryMonitorView extends JPanel implements View, Telemetr
         tableModel.insertRow(0, new Object[]{
                 formatTime(record.timestamp),
                 nvl(record.status),
-                nvl(record.adapterId),
+                nvl(record.adapterName),
                 nvl(record.objectName),
                 nvl(record.telemetryName),
                 nvl(record.httpStatus),
@@ -168,52 +190,22 @@ public final class TelemetryMonitorView extends JPanel implements View, Telemetr
         });
     }
 
-    private void onSelectionChanged(ListSelectionEvent e) {
-        if (e.getValueIsAdjusting()) {
-            return;
+    private String getClickedCellValue(TelemetryUiRecord r, int modelCol) {
+        if (r == null) {
+            return "";
         }
 
-        int viewRow = table.getSelectedRow();
-        if (viewRow < 0) {
-            detailsArea.setText("");
-            return;
-        }
-
-        int modelRow = table.convertRowIndexToModel(viewRow);
-        if (modelRow < 0 || modelRow >= records.size()) {
-            detailsArea.setText("");
-            return;
-        }
-
-        TelemetryUiRecord r = records.get(modelRow);
-        StringBuilder sb = new StringBuilder();
-        sb.append("Timestamp: ").append(formatTime(r.timestamp)).append('\n');
-        sb.append("Status: ").append(nvl(r.status)).append('\n');
-        sb.append("Adapter: ").append(nvl(r.adapterId)).append('\n');
-        sb.append("Object: ").append(nvl(r.objectName)).append('\n');
-        sb.append("Telemetry: ").append(nvl(r.telemetryName)).append('\n');
-        sb.append("DTMI: ").append(nvl(r.dtmi)).append('\n');
-        sb.append("Interface: ").append(nvl(r.interfaceId)).append('\n');
-        sb.append("HTTP: ").append(nvl(r.httpStatus)).append('\n');
-        sb.append("Raw: ").append(nvl(r.rawValue)).append('\n');
-        sb.append("Normalized: ").append(nvl(r.normalizedValue)).append('\n');
-        sb.append("Binding: ").append(nvl(r.binding)).append('\n');
-        sb.append("Message: ").append(nvl(r.message)).append('\n');
-
-        if (!r.meta.isEmpty()) {
-            sb.append("\nMeta:\n");
-            r.meta.forEach((k, v) -> sb.append("  ").append(k).append(": ").append(v).append('\n'));
-        }
-
-        if (!r.diagnostics.isEmpty()) {
-            sb.append("\nDiagnostics:\n");
-            for (String d : r.diagnostics) {
-                sb.append("  ").append(d).append('\n');
-            }
-        }
-
-        detailsArea.setText(sb.toString());
-        detailsArea.setCaretPosition(0);
+        return switch (modelCol) {
+            case 0 -> formatTime(r.timestamp);
+            case 1 -> nvl(r.status);
+            case 2 -> nvl(r.adapterName);
+            case 3 -> nvl(r.objectName);
+            case 4 -> nvl(r.telemetryName);
+            case 5 -> nvl(r.httpStatus);
+            case 6 -> nvl(r.rawValue);
+            case 7 -> nvl(r.normalizedValue);
+            default -> "";
+        };
     }
 
     private String formatTime(java.time.Instant t) {

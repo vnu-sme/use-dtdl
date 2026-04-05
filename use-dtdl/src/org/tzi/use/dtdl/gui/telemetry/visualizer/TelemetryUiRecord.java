@@ -9,7 +9,7 @@ public final class TelemetryUiRecord {
     public final Instant timestamp;
     public final String dtmi;
     public final String interfaceId;
-    public final String adapterId;
+    public final String adapterName;
     public final String objectName;
     public final String telemetryName;
     public final String status;
@@ -25,7 +25,7 @@ public final class TelemetryUiRecord {
             Instant timestamp,
             String dtmi,
             String interfaceId,
-            String adapterId,
+            String adapterName,
             String objectName,
             String telemetryName,
             String status,
@@ -40,7 +40,7 @@ public final class TelemetryUiRecord {
         this.timestamp = timestamp;
         this.dtmi = dtmi;
         this.interfaceId = interfaceId;
-        this.adapterId = adapterId;
+        this.adapterName  = adapterName;
         this.objectName = objectName;
         this.telemetryName = telemetryName;
         this.status = status;
@@ -57,7 +57,7 @@ public final class TelemetryUiRecord {
     public String toString() {
         return "TelemetryUiRecord{" +
                 "timestamp=" + timestamp +
-                ", adapterId='" + adapterId + '\'' +
+                ", adapterName='" + adapterName + '\'' +
                 ", objectName='" + objectName + '\'' +
                 ", telemetryName='" + telemetryName + '\'' +
                 ", status='" + status + '\'' +
