@@ -784,6 +784,14 @@ public class MainWindow extends JFrame {
 		addNewViewFrame(f, true);
 	}
 
+    public void addViewFrame(ViewFrame frame) {
+        addNewViewFrame(frame);
+    }
+
+    public void addViewFrame(ViewFrame frame, boolean legacySize) {
+        addNewViewFrame(frame, legacySize);
+    }
+
     /**
      * Adds a new view (internal frame) to the desktop.
      * @param legacySize 

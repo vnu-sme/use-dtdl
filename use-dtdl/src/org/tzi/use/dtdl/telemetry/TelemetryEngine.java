@@ -1,5 +1,7 @@
 package org.tzi.use.dtdl.telemetry;
 
+import org.tzi.use.dtdl.gui.telemetry.visualizer.TelemetryUiListener;
+import org.tzi.use.dtdl.gui.telemetry.visualizer.TelemetryUiRecord;
 import org.tzi.use.main.Session;
 
 import java.io.Closeable;
@@ -8,6 +10,12 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.Map;
+import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * High-level engine wiring adapters, event bus and processor together.
@@ -23,6 +31,9 @@ public final class TelemetryEngine implements AutoCloseable {
 
     // track attached adapters by id so we can detach/close them later
     private final ConcurrentHashMap<String, TelemetryAdapter> adapters = new ConcurrentHashMap<>();
+    private static final int MAX_UI_HISTORY = 500;
+    private final Deque<TelemetryUiRecord> uiHistory = new ArrayDeque<>();
+    private final CopyOnWriteArrayList<TelemetryUiListener> uiListeners = new CopyOnWriteArrayList<>();
 
     public TelemetryEngine(Session session) {
         this.session = session;
@@ -52,6 +63,11 @@ public final class TelemetryEngine implements AutoCloseable {
 
                     // APPLY and CHECK after processing
                     boolean violated = applier.applyAndCheck(fact);
+
+                    publishUiRecord(buildUiRecord(ev, b, fact, violated,
+                            violated ? "VIOLATION" : (fact.status == TelemetryFact.Status.INVALID ? "INVALID" : "APPLIED"),
+                            fact.diagnostics.isEmpty() ? null : fact.diagnostics.get(fact.diagnostics.size() - 1)));
+
                     if (violated) {
                         String details = String.join("\n", fact.diagnostics);
                         String adapterId = b.adapterId != null ? b.adapterId : ev.source;
@@ -61,6 +77,8 @@ public final class TelemetryEngine implements AutoCloseable {
                 } catch (Throwable t) {
                     System.err.println("[TelemetryEngine] processing failed for binding " + b + ": " + t.getMessage());
                     t.printStackTrace(System.err);
+
+                    publishUiRecord(buildUiRecord(ev, b, null, false, "ERROR", t.getMessage()));
                 }
 
                 handled++;
@@ -79,6 +97,11 @@ public final class TelemetryEngine implements AutoCloseable {
                 for (String d : fact.diagnostics) System.err.println(" diag: " + d);
                 TelemetryApplier apply = new TelemetryApplier(this.session);
                 boolean violated = apply.applyAndCheck(fact);
+
+                publishUiRecord(buildUiRecord(ev, null, fact, violated,
+                        violated ? "VIOLATION" : (fact.status == TelemetryFact.Status.INVALID ? "INVALID" : "APPLIED"),
+                        fact.diagnostics.isEmpty() ? null : fact.diagnostics.get(fact.diagnostics.size() - 1)));
+
                 if (violated) {
                     String details = String.join("\n", fact.diagnostics);
                     String adapterId = ev.source;
@@ -87,6 +110,8 @@ public final class TelemetryEngine implements AutoCloseable {
             } catch (Throwable t) {
                 System.err.println("[TelemetryEngine] processing failed: " + t.getMessage());
                 t.printStackTrace(System.err);
+
+                publishUiRecord(buildUiRecord(ev, null, null, false, "ERROR", t.getMessage()));
             }
         } catch (Throwable t) {
             System.err.println("[TelemetryEngine] consume error: " + t.getMessage());
@@ -129,6 +154,10 @@ public final class TelemetryEngine implements AutoCloseable {
                 System.err.println("[TelemetryEngine] failed to post event: " + t.getMessage());
             }
         });
+
+        publishUiRecord(new TelemetryUiRecord(Instant.now(), null, null, resolveAdapterName(adapter.id()), null,
+                null, "RUNNING", null, null, null, null,
+                "Adapter attached", null, List.of()));
     }
 
     public void detachAdapter(String adapterId) {
@@ -137,6 +166,9 @@ public final class TelemetryEngine implements AutoCloseable {
         if (a != null) {
             try {
                 a.close();
+                publishUiRecord(new TelemetryUiRecord(Instant.now(), null, null, resolveAdapterName(adapterId), null,
+                        null, "STOPPED", null, null, null, null,
+                        "Adapter detached", null, List.of()));
             } catch (Throwable t) {
                 System.err.println("[TelemetryEngine] failed to close adapter " + adapterId + ": " + t.getMessage());
             }
@@ -145,6 +177,33 @@ public final class TelemetryEngine implements AutoCloseable {
 
     public TelemetryAdapter adapter(String id) {
         return adapters.get(id);
+    }
+
+    private String resolveAdapterName(String adapterId) {
+        if (adapterId == null) {
+            return "";
+        }
+
+        TelemetryAdapter adapter = adapters.get(adapterId);
+        if (adapter == null) {
+            return adapterId;
+        }
+
+        return getAdapterDeviceId(adapter);
+    }
+
+    public String getAdapterDeviceId(TelemetryAdapter adapter) {
+        if (adapter == null) {
+            return "";
+        }
+
+        if (adapter instanceof HttpPollingAdapter http) {
+            if (http.deviceId() != null && !http.deviceId().isBlank()) {
+                return http.deviceId();
+            }
+        }
+
+        return adapter.id();
     }
 
     public void addListener(TelemetryEventListener l) {
@@ -161,6 +220,73 @@ public final class TelemetryEngine implements AutoCloseable {
                 l.onTelemetryViolation(adapterId, message);
             } catch (Throwable ignored) {}
         }
+    }
+
+    public void addUiListener(TelemetryUiListener listener) {
+        if (listener != null) {
+            uiListeners.addIfAbsent(listener);
+        }
+    }
+
+    public void removeUiListener(TelemetryUiListener listener) {
+        if (listener != null) {
+            uiListeners.remove(listener);
+        }
+    }
+
+    public List<TelemetryUiRecord> history() {
+        synchronized (uiHistory) {
+            return new ArrayList<>(uiHistory);
+        }
+    }
+
+    private void publishUiRecord(TelemetryUiRecord record) {
+        if (record == null) {
+            return;
+        }
+
+        synchronized (uiHistory) {
+            uiHistory.addLast(record);
+            while (uiHistory.size() > MAX_UI_HISTORY) {
+                uiHistory.removeFirst();
+            }
+        }
+
+        for (TelemetryUiListener listener : uiListeners) {
+            try {
+                listener.onTelemetryRecord(record);
+            } catch (Throwable t) {
+                System.err.println("[TelemetryEngine] UI listener error: " + t.getMessage());
+            }
+        }
+    }
+
+    private TelemetryUiRecord buildUiRecord(TelemetryEvent ev, BindingRegistry.Binding binding, TelemetryFact fact,
+            boolean violated, String status, String message) {
+        String httpStatus = null;
+        if (ev != null && ev.meta != null && ev.meta.get("httpStatus") != null) {
+            httpStatus = String.valueOf(ev.meta.get("httpStatus"));
+        }
+
+        String rawValue = ev == null || ev.rawValue == null ? null : String.valueOf(ev.rawValue);
+        String normalizedValue = fact == null || fact.normalizedValue == null ? null : String.valueOf(fact.normalizedValue);
+
+        return new TelemetryUiRecord(
+                Instant.now(),
+                ev == null ? null : ev.dtmi,
+                fact == null ? null : fact.interfaceId,
+                resolveAdapterName(ev == null ? null : ev.source),
+                fact == null ? (ev == null ? null : ev.objectName) : fact.matchedObjectName,
+                fact == null ? null : fact.telemetryName,
+                status,
+                httpStatus,
+                rawValue,
+                normalizedValue,
+                binding == null ? null : binding.toString(),
+                message,
+                ev == null ? null : ev.meta,
+                fact == null ? List.of() : new ArrayList<>(fact.diagnostics)
+        );
     }
 
     @Override

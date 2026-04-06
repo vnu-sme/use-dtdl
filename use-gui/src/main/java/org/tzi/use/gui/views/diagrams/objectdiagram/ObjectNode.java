@@ -22,6 +22,7 @@ package org.tzi.use.gui.views.diagrams.objectdiagram;
 import java.awt.Color;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.event.MouseEvent;
 import java.awt.font.TextAttribute;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
@@ -33,6 +34,7 @@ import org.tzi.use.gui.main.ModelBrowserSorting.SortChangeEvent;
 import org.tzi.use.gui.main.ModelBrowserSorting.SortChangeListener;
 import org.tzi.use.gui.views.diagrams.DiagramOptionChangedListener;
 import org.tzi.use.gui.views.diagrams.ObjectNodeActivity;
+import org.tzi.use.gui.views.diagrams.ToolTipProvider;
 import org.tzi.use.gui.views.diagrams.elements.PlaceableNode;
 import org.tzi.use.gui.views.diagrams.util.Util;
 import org.tzi.use.uml.mm.MAttribute;
@@ -50,8 +52,10 @@ import org.tzi.use.uml.sys.MObjectState;
  * @author Fabian Gutsche
  * @author Lars Hamann
  */
-public class ObjectNode extends PlaceableNode implements SortChangeListener, ObjectNodeActivity {
+public class ObjectNode extends PlaceableNode implements SortChangeListener, ObjectNodeActivity, ToolTipProvider {
     private static final int MAX_VALUE_LEN = 40;
+    private static final int MAX_TOOLTIP_VALUE_LEN = 120;
+    private static final int MAX_TOOLTIP_ATTR_LINES = 10;
 
 	protected final ObjDiagramOptions fOpt;
 	private final NewObjectDiagramView fParent;
@@ -336,5 +340,85 @@ public class ObjectNode extends PlaceableNode implements SortChangeListener, Obj
         if (s == null) return "null";
         if (s.length() <= MAX_VALUE_LEN) return s;
         return s.substring(0, MAX_VALUE_LEN - 3) + "...";
+    }
+
+    @Override
+    public String getToolTip(MouseEvent event) {
+        if (fOpt.isShowAttributes()) {
+            return null;
+        }
+
+        MObjectState objState = fObject.state(fParent.system().state());
+        if (objState == null) {
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html>");
+//        sb.append("<b>").append(escapeHtml(fObject.name())).append("</b>");
+//        sb.append(" : ").append(escapeHtml(fObject.cls().name()));
+//        sb.append("<br>");
+
+        List<MAttribute> attrs = fAttributes;
+        if (attrs == null || attrs.isEmpty()) {
+            sb.append("<i>No attributes</i>");
+            sb.append("</html>");
+            return sb.toString();
+        }
+
+        int shown = 0;
+        for (MAttribute attr : attrs) {
+            if (shown >= MAX_TOOLTIP_ATTR_LINES) {
+                sb.append("<br><i>... ")
+                        .append(attrs.size() - shown)
+                        .append(" more</i>");
+                break;
+            }
+
+            Value val = objState.attributeValue(attr);
+            String valueText;
+
+            if (val == null) {
+                valueText = "null";
+            } else if (val instanceof EnumValue) {
+                EnumValue ev = (EnumValue) val;
+                valueText = "#" + ev.value();
+            } else {
+                valueText = val.toString();
+            }
+
+            if (valueText.length() > MAX_TOOLTIP_VALUE_LEN) {
+                valueText = valueText.substring(0, MAX_TOOLTIP_VALUE_LEN - 3) + "...";
+            }
+
+            sb.append(escapeHtml(attr.isDerived() ? "/" + attr.name() : attr.name()))
+                    .append(" = ")
+                    .append(escapeHtml(valueText))
+                    .append("<br>");
+
+            shown++;
+        }
+
+        sb.append("</html>");
+        return sb.toString();
+    }
+
+    private String escapeHtml(String s) {
+        if (s == null) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '&' -> out.append("&amp;");
+                case '<' -> out.append("&lt;");
+                case '>' -> out.append("&gt;");
+                case '"' -> out.append("&quot;");
+                case '\'' -> out.append("&#39;");
+                default -> out.append(c);
+            }
+        }
+        return out.toString();
     }
 }
