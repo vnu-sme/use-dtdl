@@ -46,6 +46,7 @@ public final class TelemetryApplier {
         if (matchedObject == null) return false;
 
         MObject target = session.system().state().objectByName(matchedObject);
+        logTargetSnapshot("before-apply", target, session);
         if (target == null) {
             System.err.println("[TelemetryApplier] target object not found: " + matchedObject);
             return false;
@@ -84,6 +85,7 @@ public final class TelemetryApplier {
 
                     try {
                         sysApi.setAttributeValueEx(session.system().state().objectByName(target.name()), mAttr, useVal);
+                        logTargetSnapshot("after-attribute-write", target, session);
                     } catch (Exception ex) {
                         System.err.println("[TelemetryApplier] failed setting attribute '" + mAttr.name() + "' : " + ex.getMessage());
                         ex.printStackTrace(System.err);
@@ -97,6 +99,7 @@ public final class TelemetryApplier {
                         var useVal = useService.buildUseValue(mAttr.type(), normalized);
                         try {
                             sysApi.setAttributeValueEx(session.system().state().objectByName(target.name()), mAttr, useVal);
+                            logTargetSnapshot("after-attribute-write", target, session);
                         } catch (Exception ex) {
                             System.err.println("[TelemetryApplier] failed setting attribute '" + mAttr.name() + "' : " + ex.getMessage());
                             ex.printStackTrace(System.err);
@@ -112,8 +115,17 @@ public final class TelemetryApplier {
             try {
                 session.system().ensureStateLinkSetsForModel();
             } catch (Throwable ignored) {}
+
             try {
                 session.system().state().updateDerivedValues(true);
+                logTargetSnapshot("after-derived-update", target, session);
+            } catch (Throwable ignored) {}
+
+            try {
+                System.out.println("[TELEM] applied telemetry, evaluating rules");
+                System.out.println("[TELEM] calling operationService.evaluateAll()");
+                DTDLPluginState.operationService(session).evaluateAll();
+                logTargetSnapshot("after-operation-evaluate", target, session);
             } catch (Throwable ignored) {}
 
 
@@ -239,5 +251,31 @@ public final class TelemetryApplier {
         }
 
         return sb.toString();
+    }
+
+    private void logTargetSnapshot(String stage, MObject target, Session session) {
+        if (target == null) {
+            System.out.println("[TELEM] " + stage + " target=null");
+            return;
+        }
+        if (session == null || session.system() == null || target.cls() == null) {
+            System.out.println("[TELEM] " + stage + " object=" + target.name() + " class=<null>");
+            return;
+        }
+
+        System.out.println("[TELEM] " + stage + " object=" + target.name() + " class=" + target.cls().name());
+        try {
+            var state = target.state(session.system().state());
+            for (MAttribute attr : target.cls().allAttributes()) {
+                Object value = null;
+                try {
+                    value = state.attributeValue(attr);
+                } catch (Throwable ignored) {
+                }
+                System.out.println("[TELEM]   " + attr.name() + " = " + value);
+            }
+        } catch (Throwable t) {
+            System.out.println("[TELEM]   snapshot failed: " + t.getMessage());
+        }
     }
 }

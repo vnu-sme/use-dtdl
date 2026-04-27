@@ -12,15 +12,15 @@
                 toolbaritem="Load DTDL specification"
                 id="org.tzi.use.dtdl.actions.LoadDTDLSpecificationAction">
         </action>
-        <action
-                label="DTDL Diagram"
-                class="org.tzi.use.dtdl.actions.OpenDTDLDiagramAction"
-                menu="use-dtdl"
-                menuitem="DTDL Diagram"
-                toolbaritem="DTDL Diagram"
-                tooltip="Create DTDL diagram view"
-                id="org.tzi.use.dtdl.actions.OpenDTDLDiagramAction">
-        </action>
+<!--        <action-->
+<!--                label="DTDL Diagram"-->
+<!--                class="org.tzi.use.dtdl.actions.OpenDTDLDiagramAction"-->
+<!--                menu="use-dtdl"-->
+<!--                menuitem="DTDL Diagram"-->
+<!--                toolbaritem="DTDL Diagram"-->
+<!--                tooltip="Create DTDL diagram view"-->
+<!--                id="org.tzi.use.dtdl.actions.OpenDTDLDiagramAction">-->
+<!--        </action>-->
         <action
                 label="Create DTDL Instance"
                 class="org.tzi.use.dtdl.actions.CreateInstanceAction"
@@ -65,6 +65,15 @@
                 toolbaritem="Monitor telemetry flow"
                 tooltip="Monitor telemetry flow"
                 id="org.tzi.use.dtdl.actions.OpenTelemetryMonitorAction">
+        </action>
+        <action
+                label="Setup operation for DT"
+                class="org.tzi.use.dtdl.actions.OpenOperationSetupAction"
+                menu="use-dtdl"
+                menuitem="Setup operation for DT"
+                toolbaritem="Setup operation for DT"
+                tooltip="Setup operation for DT"
+                id="org.tzi.use.dtdl.actions.OpenOperationSetupAction">
         </action>
     </actions>
 </plugin>

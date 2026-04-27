@@ -29,15 +29,21 @@ public class MergeOclDialog extends JDialog {
         getContentPane().add(main);
 
         // instruction + text area
-        JLabel info = new JLabel("<html>Paste OCL expressions, operation bodies or .use fragments to be merged with the current model.<br>"
-                + "The current model will be exported, concatenated with your text and compiled. On success the session's system will be replaced.</html>");
+        JLabel info = new JLabel("<html>Paste class operation blocks in the top box and OCL constraints in the bottom box.<br>"
+                + "Each operation block must start with <b>class ClassName</b> and will be injected into that generated class.</html>");
         info.setFont(info.getFont().deriveFont(Font.PLAIN, 12f));
         main.add(info, BorderLayout.NORTH);
 
-        JTextArea textArea = new JTextArea(25, 100);
-        textArea.setLineWrap(false);
-        JScrollPane sp = new JScrollPane(textArea, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        main.add(sp, BorderLayout.CENTER);
+        JTextArea operationArea = new JTextArea(12, 100);
+        operationArea.setLineWrap(false);
+
+        JTextArea oclArea = new JTextArea(12, 100);
+        oclArea.setLineWrap(false);
+
+        JPanel center = new JPanel(new GridLayout(2, 1, 8, 8));
+        center.add(wrapEditor("Class operations", operationArea));
+        center.add(wrapEditor("OCL constraints", oclArea));
+        main.add(center, BorderLayout.CENTER);
 
         // buttons
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -52,50 +58,16 @@ public class MergeOclDialog extends JDialog {
         previewBtn.addActionListener(e -> {
             StringWriter sw = new StringWriter();
             PrintWriter pw = new PrintWriter(sw, true);
+
             try {
-                StringWriter modelSw = new StringWriter();
-                PrintWriter modelPw = new PrintWriter(modelSw, true);
+                String merged = DTDLOCLIntegrator.buildMergedSpec(
+                        session,
+                        operationArea.getText(),
+                        oclArea.getText(),
+                        pw
+                );
 
-                MMPrintVisitor mmv = new MMPrintVisitor(modelPw);
-                session.system().model().processWithVisitor(mmv);
-                modelPw.flush();
-
-                String modelText = modelSw.toString();
-
-                // inject MDataTypes after "model <name>"
-                StringWriter dtSw = new StringWriter();
-                PrintWriter dtPw = new PrintWriter(dtSw, true);
-                MMPrintVisitor dtVisitor = new MMPrintVisitor(dtPw);
-
-                var model = session.system().model();
-                org.tzi.use.uml.mm.MDataType[] dataTypes =
-                        model.dataTypes().toArray(new org.tzi.use.uml.mm.MDataType[0]);
-                java.util.Arrays.sort(dataTypes, new UseFileOrderComparator());
-
-                for (org.tzi.use.uml.mm.MDataType dt : dataTypes) {
-                    dt.processWithVisitor(dtVisitor);
-                    dtPw.println();
-                }
-
-                dtPw.flush();
-                // get original dt text
-                String dtText = dtSw.toString();
-
-
-                // remove "attributes" sections from dataType blocks to avoid USE parser errors
-                // Explanation: remove the '\n attributes ...' block up to the next 'operations' or 'end'
-                dtText = dtText.replaceAll("(?ms)\\n\\s*attributes\\b.*?(?=\\n\\s*(operations\\b|end\\b))", "\n");
-
-                // insert after first line (model declaration)
-                int firstNewline = modelText.indexOf('\n');
-                if (firstNewline > 0) {
-                    modelText = modelText.substring(0, firstNewline + 1) + "\n" + dtText + "\n" + modelText.substring(firstNewline + 1);
-                }
-
-                pw.println("// ---- model (generated) ----");
-                pw.println(modelText);
-                pw.println("\n\n// ---- user-provided OCL/spec ----\n");
-                pw.println(textArea.getText());
+                pw.println(merged == null ? "[Preview] Failed to build merged spec." : merged);
                 pw.flush();
             } catch (Throwable t) {
                 pw.println("[Preview] Failed to export model: " + t.getMessage());
@@ -110,11 +82,15 @@ public class MergeOclDialog extends JDialog {
 
         compileBtn.addActionListener(e -> {
             compileBtn.setEnabled(false);
-            String userText = textArea.getText();
             StringWriter diagSw = new StringWriter();
             PrintWriter diagPw = new PrintWriter(diagSw, true);
 
-            DTDLOCLIntegrator.CompileResult res = DTDLOCLIntegrator.compileAndReplaceSystemWithOcl(session, userText, diagPw);
+            DTDLOCLIntegrator.CompileResult res = DTDLOCLIntegrator.compileAndReplaceSystemWithOcl(
+                    session,
+                    operationArea.getText(),
+                    oclArea.getText(),
+                    diagPw
+            );
 
             String diag = diagSw.toString();
             if (res.success) {
@@ -136,5 +112,12 @@ public class MergeOclDialog extends JDialog {
 
         pack();
         setLocationRelativeTo(parent);
+    }
+
+    private JPanel wrapEditor(String title, JTextArea area) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createTitledBorder(title));
+        panel.add(new JScrollPane(area, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED), BorderLayout.CENTER);
+        return panel;
     }
 }

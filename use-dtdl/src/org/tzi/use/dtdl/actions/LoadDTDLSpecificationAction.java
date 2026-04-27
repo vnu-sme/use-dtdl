@@ -10,6 +10,7 @@ public class LoadDTDLSpecificationAction implements IPluginActionDelegate {
     @Override
     public void performAction(IPluginAction pluginAction) {
         Session session = pluginAction.getSession();
+        DTDLPluginState.bindSession(session);
         MainWindow mainWindow = pluginAction.getParent();
 
         // Mở form chọn file DTDL

@@ -25,9 +25,4 @@ public class OpenTelemetryMonitorAction implements IPluginActionDelegate {
 
         parent.addViewFrame(frame, false);
     }
-
-    @Override
-    public boolean shouldBeEnabled(IPluginAction pluginAction) {
-        return true;
-    }
 }

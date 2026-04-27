@@ -9,6 +9,7 @@ import org.tzi.use.dtdl.DTDLModel.Property.Property;
 import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
 import org.tzi.use.dtdl.DTDLModel.Component.Component;
 import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
+import org.tzi.use.dtdl.actions.DTDLPluginState;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.dtdl.util.Utils;
 import org.tzi.use.parser.SemanticException;
@@ -427,6 +428,8 @@ public class DTDLToMModelMapper {
                 if (ce instanceof org.tzi.use.dtdl.DTDLModel.Command.Command) {
                     org.tzi.use.dtdl.DTDLModel.Command.Command cmd = (org.tzi.use.dtdl.DTDLModel.Command.Command) ce;
                     VarDeclList varDecls = new VarDeclList(false);
+                    List<String> paramNames = new ArrayList<>();
+
                     if (cmd.getRequest() != null) {
                         Schema s = cmd.getRequest().getSchema();
                         push(cls.name());
@@ -435,7 +438,12 @@ public class DTDLToMModelMapper {
                         pop();
                         pop();
                         Type t = api.getType(tname);
-                        varDecls.add(new VarDecl(cmd.getRequest().getName() == null ? "arg" : cmd.getRequest().getName(), t));
+                        String pname = cmd.getRequest().getName() == null || cmd.getRequest().getName().isBlank()
+                                ? "arg"
+                                : cmd.getRequest().getName();
+
+                        varDecls.add(new VarDecl(pname, t));
+                        paramNames.add(pname);
                     }
                     boolean opExists = false;
                     for (MOperation mop : cls.operations()) {
@@ -445,6 +453,8 @@ public class DTDLToMModelMapper {
                         MOperation op = new MOperation(cmd.getName(), varDecls, null, false);
                         try { cls.addOperation(op); } catch (Exception ex) { throw new UseApiException("Failed to add operation", ex); }
                     }
+
+                    DTDLPluginState.operationCatalog().register(cls.name(), cmd.getName(), paramNames);
                 }
             }
         }
