@@ -41,18 +41,32 @@ public final class JacksonPath {
     private static String toJsonPointer(String dotPath) {
         StringBuilder sb = new StringBuilder();
         String[] parts = dotPath.split("\\.");
+
         for (String p : parts) {
-            int br = p.indexOf('[');
-            if (br < 0) {
-                sb.append('/').append(p);
-            } else {
-                sb.append('/').append(p, 0, br);
-                int br2 = p.indexOf(']', br);
-                if (br2 > br) {
-                    sb.append('/').append(p, br + 1, br2);
+            if (p.isEmpty()) continue;
+
+            while (p.contains("[")) {
+                int fieldEnd = p.indexOf('[');
+                String field = p.substring(0, fieldEnd);
+
+                if (!field.isEmpty()) {
+                    sb.append('/').append(field);
                 }
+
+                int start = p.indexOf('[');
+                int end = p.indexOf(']');
+
+                String index = p.substring(start + 1, end);
+                sb.append('/').append(index);
+
+                p = p.substring(end + 1);
+            }
+
+            if (!p.isEmpty()) {
+                sb.append('/').append(p);
             }
         }
+
         return sb.toString();
     }
 }

@@ -42,6 +42,7 @@ public class ApiRegistrationDialog extends JDialog {
     private final UseRuntimeService useService;
 
     private final JTextField urlField = new JTextField();
+    private final JComboBox<String> methodComboBox = new JComboBox<>(new String[]{"GET", "POST"});
     private final JTextField intervalField = new JTextField("2000");
     private final JComboBox<String> instanceCombo = new JComboBox<>();
     private final JTextField deviceIdField = new JTextField();
@@ -74,6 +75,12 @@ public class ApiRegistrationDialog extends JDialog {
         form.add(new JLabel("URL"), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         form.add(urlField, gbc);
+
+        gbc.gridx = 0; gbc.gridy++;
+        form.add(new JLabel("Method"), gbc);
+
+        gbc.gridx = 1;
+        form.add(methodComboBox, gbc);
 
         gbc.gridx = 0; gbc.gridy++; gbc.weightx = 0;
         form.add(new JLabel("Interval ms"), gbc);
@@ -405,7 +412,8 @@ public class ApiRegistrationDialog extends JDialog {
 
         String id = "api-" + UUID.randomUUID().toString().substring(0,8);
 
-        HttpPollingAdapter adapter = new HttpPollingAdapter(id, url, interval, dev, bindTargetObject);
+        String method = methodComboBox.getSelectedItem().toString();
+        HttpPollingAdapter adapter = new HttpPollingAdapter(id, url, method, interval, dev, bindTargetObject);
 
         try {
             // register and start adapter
