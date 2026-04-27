@@ -194,7 +194,7 @@ public final class DTDLPluginState {
                     new UseOperationExecutor(session, OPERATION_CATALOG)
             );
 
-            startRuleScheduler(); // ✅ ADD THIS
+            startRuleScheduler();
         }
 
         attachSystemEventBridge();
@@ -208,7 +208,7 @@ public final class DTDLPluginState {
 
                     if (pendingEvaluation && operationService != null) {
                         pendingEvaluation = false;
-                        operationService.evaluateAll(); // ✅ SAFE HERE
+                        operationService.evaluateAll();
                     }
 
                 } catch (Throwable ignored) {}

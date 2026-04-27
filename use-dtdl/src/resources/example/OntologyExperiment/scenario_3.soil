@@ -1,0 +1,24 @@
+!create district3 : District
+!create poi3 : Point_of_Interest
+!create pole3 : Pole
+!create sl3 : Streetlight
+!create sg3 : StreetlightGroup
+!create sc3 : StreetlightControlCabinet
+!create dev3 : Device
+!create aq3 : AirQualityObserved
+!create aq3_level1 : AirQualityLevel
+!create w3 : WeatherObserved
+
+!insert (aq3, aq3_level1) into AirQualityObserved_comp_airQualityLevel
+!insert (aq3, poi3) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (aq3, w3) into AirQualityObserved_refWeatherObserved_WeatherObserved
+!insert (aq3, dev3) into AirQualityObserved_refDevice_Device
+
+!insert (w3, poi3) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (w3, dev3) into WeatherObserved_refDevice_Device
+
+!insert (pole3, sl3) into Pole_refStreetlight_Streetlight
+!insert (sl3, sg3) into Streetlight_refStreetlightGroup_StreetlightGroup
+!insert (sl3, sc3) into Streetlight_refStreetlightControlCabinet_StreetlightControlCabinet
+!insert (pole3, w3) into Pole_refWeather_WeatherObserved
+!insert (pole3, aq3) into Pole_refAirQualityObserved_AirQualityObserved

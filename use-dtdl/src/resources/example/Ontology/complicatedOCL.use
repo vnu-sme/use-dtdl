@@ -1,0 +1,167 @@
+
+context AirQualityObserved
+inv AQIFromTelemetryGood:
+  let clean : Boolean =
+    self.__tel_PM25 <= 12.0 and
+    self.__tel_PM10 <= 54.0 and
+    self.__tel_NO2 <= 53.0 and
+    self.__tel_O3 <= 54.0 and
+    self.__tel_CO <= 4.4 and
+    self.__tel_SO2 <= 35.0 and
+    self.__tel_WindSpeed >= 1.0 and
+    self.__tel_relativeHumidity <= 80.0
+  in
+    clean implies self.airQualityIndex <= 50.0
+
+context AirQualityObserved
+inv AQIFromTelemetryModerate:
+  let moderate : Boolean =
+    (self.__tel_PM25 > 12.0 and self.__tel_PM25 <= 35.4) or
+    (self.__tel_PM10 > 54.0 and self.__tel_PM10 <= 154.0) or
+    (self.__tel_NO2 > 53.0 and self.__tel_NO2 <= 100.0) or
+    (self.__tel_O3 > 54.0 and self.__tel_O3 <= 70.0) or
+    (self.__tel_CO > 4.4 and self.__tel_CO <= 9.4) or
+    (self.__tel_SO2 > 35.0 and self.__tel_SO2 <= 75.0)
+  in
+    moderate implies self.airQualityIndex > 50.0 and self.airQualityIndex <= 100.0
+
+context AirQualityObserved
+inv AQIFromTelemetrySevere:
+  let severeCount : Integer =
+      (if self.__tel_PM25 > 150.4 then 1 else 0 endif) +
+      (if self.__tel_PM10 > 254.0 then 1 else 0 endif) +
+      (if self.__tel_NO2 > 360.0 then 1 else 0 endif) +
+      (if self.__tel_O3 > 200.0 then 1 else 0 endif) +
+      (if self.__tel_CO > 15.4 then 1 else 0 endif) +
+      (if self.__tel_SO2 > 185.0 then 1 else 0 endif)
+  in
+    severeCount >= 1 implies self.airQualityIndex > 150.0
+
+context AirQualityObserved
+inv AQIFromTelemetryExtreme:
+  let severeCount : Integer =
+      (if self.__tel_PM25 > 150.4 then 1 else 0 endif) +
+      (if self.__tel_PM10 > 254.0 then 1 else 0 endif) +
+      (if self.__tel_NO2 > 360.0 then 1 else 0 endif) +
+      (if self.__tel_O3 > 200.0 then 1 else 0 endif) +
+      (if self.__tel_CO > 15.4 then 1 else 0 endif) +
+      (if self.__tel_SO2 > 185.0 then 1 else 0 endif)
+  in
+    severeCount >= 2 implies self.airQualityIndex > 200.0
+
+context AirQualityObserved
+inv AQICannotBeLowWhenMultiplePollutantsAreElevated:
+  let elevatedCount : Integer =
+      (if self.__tel_PM25 > 35.4 then 1 else 0 endif) +
+      (if self.__tel_PM10 > 154.0 then 1 else 0 endif) +
+      (if self.__tel_NO2 > 100.0 then 1 else 0 endif) +
+      (if self.__tel_O3 > 70.0 then 1 else 0 endif) +
+      (if self.__tel_CO > 9.4 then 1 else 0 endif) +
+      (if self.__tel_SO2 > 75.0 then 1 else 0 endif)
+  in
+    elevatedCount >= 2 implies self.airQualityIndex > 100.0
+
+context AirQualityObserved
+inv AQILevelConsistency:
+  (self.airQualityIndex <= 50.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::good)) and
+  (self.airQualityIndex > 50.0 and self.airQualityIndex <= 100.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::moderate)) and
+  (self.airQualityIndex > 100.0 and self.airQualityIndex <= 150.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::unhealthyForSensitiveGroups)) and
+  (self.airQualityIndex > 150.0 and self.airQualityIndex <= 200.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::unhealthy)) and
+  (self.airQualityIndex > 200.0 and self.airQualityIndex <= 300.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::veryUnhealthy)) and
+  (self.airQualityIndex > 300.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::hazardous))
+
+
+context StreetlightControlCabinet
+inv StressForbidsManualMode:
+  let impactedPoles : Set(Pole) =
+    Pole.allInstances()->select(p |
+      p.Streetlight_refStreetlight->exists(sl |
+        sl.StreetlightControlCabinet_refStreetlightControlCabinet->includes(self)
+      )
+    )->asSet()
+  in
+    (impactedPoles->exists(p |
+      p.WeatherObserved_refWeather->exists(w |
+        w.__tel_visibility < 1000.0 or w.__tel_precipitation > 0.0
+      ) or
+      p.AirQualityObserved_refAirQualityObserved->exists(a |
+        a.airQualityIndex > 150.0
+      ) or
+      p.NoiseLevelObserved_refNoiseLevel->exists(n |
+        n.__tel_LAeq > 40.0
+      )
+    )) implies self.workingMode <> StreetlightControlCabinet_workingMode_Enum::manual
+
+
+context Point_of_Interest
+inv AirQualityIncidentDetection:
+  let observations : Set(AirQualityObserved) =
+    AirQualityObserved.allInstances()->select(a |
+      a.Point_of_Interest_refPointOfInterest->notEmpty() and
+      a.Point_of_Interest_refPointOfInterest->any(true) = self
+    )
+  in
+    observations->exists(a1 |
+      let sameGroup : Set(AirQualityObserved) =
+        observations->select(a2 |
+          a2.WeatherObserved_refWeatherObserved = a1.WeatherObserved_refWeatherObserved and
+          a2.dateObserved = a1.dateObserved
+        )
+      in
+        let unhealthySensors : Set(Device) =
+          sameGroup->select(a |
+            a.airQualityIndex >= 151.0
+          )->collect(a | a.Device_refDevice)->asSet()
+        in
+          unhealthySensors->size() >= 2
+          or
+          (unhealthySensors->size() = 1 and sameGroup->exists(a | a.airQualityIndex < 151.0))
+    )
+
+
+
+context StreetlightGroup
+inv WeatherDrivenNoDayOff:
+  let impactedPoles : Set(Pole) =
+    Pole.allInstances()->select(p |
+      p.Streetlight_refStreetlight->exists(sl |
+        sl.StreetlightGroup_refStreetlightGroup->includes(self)
+      )
+    )->asSet()
+  in
+    (impactedPoles->exists(p |
+      p.WeatherObserved_refWeather->exists(w |
+        w.__tel_visibility < 1000.0 or w.__tel_precipitation > 0.0
+      ) or
+      p.AirQualityObserved_refAirQualityObserved->exists(a |
+        a.airQualityIndex > 150.0
+      ) or
+      p.NoiseLevelObserved_refNoiseLevel->exists(n |
+        n.__tel_LAeq > 40.0
+      )
+    )) implies self.switchingMode <> StreetlightGroup_switchingMode_Enum::dayOFF
+
+
+
+
+
+
+
+
+-- ======== THIS IS ERROR SYNTAX ==========
+context OffStreetParking
+inv CapacityAndStatusConsistency:
+  self.totalSpotNumberOfOffStreetParking->size() = 1 and
+  self.totalSpotNumberOfOffStreetParking->any(true).totalSpotNumber >= self.__tel_occupiedSpotNumber and
+  self.OffStreetParking_refParkingSpot->forAll(ps | ps.category = ParkingSpot_category_Enum::offStreet) and
+  (self.__tel_occupiedSpotNumber = self.totalSpotNumberOfOffStreetParking->any(true).totalSpotNumber implies
+      self.__tel_status = OffStreetParking_status_Enum::full) and
+  (self.__tel_status = OffStreetParking_status_Enum::closedAbnormal implies
+      self.OffStreetParking_refParkingSpot->forAll(ps | ps.status = ParkingSpot_status_Enum::closed))
+

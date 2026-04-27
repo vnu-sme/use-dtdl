@@ -1,0 +1,33 @@
+!create district2 : District
+!create poi2 : Point_of_Interest
+!create pole2 : Pole
+!create sl2 : Streetlight
+!create sg2 : StreetlightGroup
+!create sc2 : StreetlightControlCabinet
+!create dev2 : Device
+!create aq2 : AirQualityObserved
+!create aq2_level1 : AirQualityLevel
+!create w2 : WeatherObserved
+!create water2 : WaterQualityObserved
+!create noise2 : NoiseLevelObserved
+
+!insert (aq2, aq2_level1) into AirQualityObserved_comp_airQualityLevel
+!insert (aq2, poi2) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (aq2, w2) into AirQualityObserved_refWeatherObserved_WeatherObserved
+!insert (aq2, dev2) into AirQualityObserved_refDevice_Device
+
+!insert (w2, poi2) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (w2, dev2) into WeatherObserved_refDevice_Device
+
+!insert (water2, poi2) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+
+!insert (noise2, poi2) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (noise2, w2) into NoiseLevelObserved_refWeatherObserverd_WeatherObserved
+!insert (noise2, dev2) into NoiseLevelObserved_refDevice_Device
+
+!insert (pole2, sl2) into Pole_refStreetlight_Streetlight
+!insert (sl2, sg2) into Streetlight_refStreetlightGroup_StreetlightGroup
+!insert (sl2, sc2) into Streetlight_refStreetlightControlCabinet_StreetlightControlCabinet
+!insert (pole2, w2) into Pole_refWeather_WeatherObserved
+!insert (pole2, aq2) into Pole_refAirQualityObserved_AirQualityObserved
+!insert (pole2, noise2) into Pole_refNoiseLevel_NoiseLevelObserved

@@ -57,7 +57,7 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
         for (ASTInterface iface : astInterfaces) {
             try {
                 iface.resolveAll();
-                iface.printsAll();
+//                iface.printsAll();
             } catch (Exception ex) {
                 // keep going but record error
                 Object maybeId = iface.props.get("@id");

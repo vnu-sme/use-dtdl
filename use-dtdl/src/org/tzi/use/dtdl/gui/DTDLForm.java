@@ -237,21 +237,21 @@ public class DTDLForm extends JDialog {
                 }
             }
 
-            System.out.println("[DTDLForm] classes and annotations:");
-            for (MClass c : mm.classes()) {
-                StringBuilder sb = new StringBuilder();
-                sb.append(" - ").append(c.name()).append(" annotations=");
-                try {
-                    // try common getter names
-                    Method m = c.getClass().getMethod("annotations");
-                    Object anns = m.invoke(c);
-                    sb.append(String.valueOf(anns));
-                } catch (Throwable t) {
-                    // fallback: iterate possible methods
-                    sb.append("<no-annotations-method>");
-                }
-                System.out.println(sb.toString());
-            }
+//            System.out.println("[DTDLForm] classes and annotations:");
+//            for (MClass c : mm.classes()) {
+//                StringBuilder sb = new StringBuilder();
+//                sb.append(" - ").append(c.name()).append(" annotations=");
+//                try {
+//                    // try common getter names
+//                    Method m = c.getClass().getMethod("annotations");
+//                    Object anns = m.invoke(c);
+//                    sb.append(String.valueOf(anns));
+//                } catch (Throwable t) {
+//                    // fallback: iterate possible methods
+//                    sb.append("<no-annotations-method>");
+//                }
+//                System.out.println(sb.toString());
+//            }
 
             SwingUtilities.invokeLater(() ->
                     mainWindow.getModelBrowser().setModel(session.system().model())

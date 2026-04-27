@@ -1,0 +1,98 @@
+```soil id="47291x"
+!create district1 : District
+!create poi1 : Point_of_Interest
+!create poi2 : Point_of_Interest
+
+!create pole1 : Pole
+!create pole2 : Pole
+!create pole3 : Pole
+
+!create sl1 : Streetlight
+!create sl2 : Streetlight
+!create sl3 : Streetlight
+
+!create sg1 : StreetlightGroup
+!create sg2 : StreetlightGroup
+
+!create sc1 : StreetlightControlCabinet
+!create sc2 : StreetlightControlCabinet
+
+!create dev1 : Device
+!create dev2 : Device
+!create dev3 : Device
+
+!create aq1 : AirQualityObserved
+!create aq2 : AirQualityObserved
+!create aq3 : AirQualityObserved
+
+!create aq1_level1 : AirQualityLevel
+!create aq2_level1 : AirQualityLevel
+!create aq3_level1 : AirQualityLevel
+
+!create w1 : WeatherObserved
+!create w2 : WeatherObserved
+
+!create water1 : WaterQualityObserved
+!create water2 : WaterQualityObserved
+
+!create noise1 : NoiseLevelObserved
+!create noise2 : NoiseLevelObserved
+
+!insert (aq1, aq1_level1) into AirQualityObserved_comp_airQualityLevel
+!insert (aq2, aq2_level1) into AirQualityObserved_comp_airQualityLevel
+!insert (aq3, aq3_level1) into AirQualityObserved_comp_airQualityLevel
+
+!insert (aq1, poi1) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (aq2, poi1) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (aq3, poi2) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+
+!insert (aq1, w1) into AirQualityObserved_refWeatherObserved_WeatherObserved
+!insert (aq2, w1) into AirQualityObserved_refWeatherObserved_WeatherObserved
+!insert (aq3, w2) into AirQualityObserved_refWeatherObserved_WeatherObserved
+
+!insert (aq1, dev1) into AirQualityObserved_refDevice_Device
+!insert (aq2, dev2) into AirQualityObserved_refDevice_Device
+!insert (aq3, dev3) into AirQualityObserved_refDevice_Device
+
+!insert (w1, poi1) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (w2, poi2) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+
+!insert (w1, dev1) into WeatherObserved_refDevice_Device
+!insert (w2, dev2) into WeatherObserved_refDevice_Device
+
+!insert (water1, poi1) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (water2, poi2) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+
+!insert (noise1, poi1) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+!insert (noise2, poi2) into EnvironmentBaseModel_refPointOfInterest_Point_of_Interest
+
+!insert (noise1, w1) into NoiseLevelObserved_refWeatherObserverd_WeatherObserved
+!insert (noise2, w2) into NoiseLevelObserved_refWeatherObserverd_WeatherObserved
+
+!insert (noise1, dev1) into NoiseLevelObserved_refDevice_Device
+!insert (noise2, dev2) into NoiseLevelObserved_refDevice_Device
+
+!insert (pole1, sl1) into Pole_refStreetlight_Streetlight
+!insert (pole2, sl2) into Pole_refStreetlight_Streetlight
+!insert (pole3, sl3) into Pole_refStreetlight_Streetlight
+
+!insert (sl1, sg1) into Streetlight_refStreetlightGroup_StreetlightGroup
+!insert (sl2, sg1) into Streetlight_refStreetlightGroup_StreetlightGroup
+!insert (sl3, sg2) into Streetlight_refStreetlightGroup_StreetlightGroup
+
+!insert (sl1, sc1) into Streetlight_refStreetlightControlCabinet_StreetlightControlCabinet
+!insert (sl2, sc1) into Streetlight_refStreetlightControlCabinet_StreetlightControlCabinet
+!insert (sl3, sc2) into Streetlight_refStreetlightControlCabinet_StreetlightControlCabinet
+
+!insert (pole1, w1) into Pole_refWeather_WeatherObserved
+!insert (pole2, w1) into Pole_refWeather_WeatherObserved
+!insert (pole3, w2) into Pole_refWeather_WeatherObserved
+
+!insert (pole1, aq1) into Pole_refAirQualityObserved_AirQualityObserved
+!insert (pole2, aq2) into Pole_refAirQualityObserved_AirQualityObserved
+!insert (pole3, aq3) into Pole_refAirQualityObserved_AirQualityObserved
+
+!insert (pole1, noise1) into Pole_refNoiseLevel_NoiseLevelObserved
+!insert (pole2, noise1) into Pole_refNoiseLevel_NoiseLevelObserved
+!insert (pole3, noise2) into Pole_refNoiseLevel_NoiseLevelObserved
+```
