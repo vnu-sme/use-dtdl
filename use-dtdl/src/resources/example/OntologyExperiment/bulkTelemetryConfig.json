@@ -1,0 +1,34 @@
+{
+  "adapters": [
+    {
+      "id": "weather-hue",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=16.1667&longitude=107.8333&daily=sunset&hourly=wind_direction_10m&current=temperature_2m,relative_humidity_2m,wind_speed_10m,pressure_msl,is_day&timezone=Asia%2FSingapore&start_date=2026-02-11&end_date=2026-02-12",
+      "method": "GET",
+      "intervalMs": 20000,
+      "deviceId": "weather-station-1",
+      "objectName": "w1",
+      "bindings": [
+        {
+          "telemetryName": "atmosphericPressure",
+          "valuePath": "current.pressure_msl"
+        },
+        {
+          "telemetryName": "temperature",
+          "valuePath": "current.temperature_2m"
+        },
+        {
+          "telemetryName": "relativeHumidity",
+          "valuePath": "current.relative_humidity_2m"
+        },
+        {
+          "telemetryName": "WindSpeed",
+          "valuePath": "current.wind_speed_10m"
+        },
+        {
+          "telemetryName": "WindDirection",
+          "valuePath": "hourly.wind_direction_10m[32]"
+        }
+      ]
+    }
+  ]
+}
