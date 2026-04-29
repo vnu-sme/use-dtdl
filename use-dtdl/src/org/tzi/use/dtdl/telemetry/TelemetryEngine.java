@@ -137,17 +137,27 @@ public final class TelemetryEngine implements AutoCloseable {
     }
 
     public void attachAdapter(TelemetryAdapter adapter) {
+        registerAdapter(adapter);
+        startAdapter(adapter.id());
+    }
+
+    public void registerAdapter(TelemetryAdapter adapter) {
         Objects.requireNonNull(adapter);
         TelemetryAdapter prev = adapters.putIfAbsent(adapter.id(), adapter);
         if (prev != null) {
-            throw new IllegalStateException("Adapter already attached: " + adapter.id());
+            throw new IllegalStateException("Adapter already registered: " + adapter.id());
+        }
+    }
+
+    public void startAdapter(String adapterId) {
+        TelemetryAdapter adapter = adapters.get(adapterId);
+        if (adapter == null) {
+            throw new IllegalStateException("Adapter not registered: " + adapterId);
         }
 
-        System.err.println("[ENGINE] Attaching adapter: " + adapter.id());
-
+        System.err.println("[ENGINE] Starting adapter: " + adapter.id());
 
         adapter.start(ev -> {
-            // incoming adapter events are posted to bus
             try {
                 bus.post(ev);
             } catch (Throwable t) {
@@ -155,9 +165,11 @@ public final class TelemetryEngine implements AutoCloseable {
             }
         });
 
-        publishUiRecord(new TelemetryUiRecord(Instant.now(), null, null, resolveAdapterName(adapter.id()), null,
-                null, "RUNNING", null, null, null, null,
-                "Adapter attached", null, List.of()));
+        publishUiRecord(new TelemetryUiRecord(
+                Instant.now(), null, null, resolveAdapterName(adapter.id()),
+                null, null, "RUNNING", null, null, null, null,
+                "Adapter started", null, List.of()
+        ));
     }
 
     public void detachAdapter(String adapterId) {

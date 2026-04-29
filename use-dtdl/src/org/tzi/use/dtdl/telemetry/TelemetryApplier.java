@@ -122,8 +122,6 @@ public final class TelemetryApplier {
             } catch (Throwable ignored) {}
 
             try {
-                System.out.println("[TELEM] applied telemetry, evaluating rules");
-                System.out.println("[TELEM] calling operationService.evaluateAll()");
                 DTDLPluginState.operationService(session).evaluateAll();
                 logTargetSnapshot("after-operation-evaluate", target, session);
             } catch (Throwable ignored) {}
@@ -255,15 +253,12 @@ public final class TelemetryApplier {
 
     private void logTargetSnapshot(String stage, MObject target, Session session) {
         if (target == null) {
-            System.out.println("[TELEM] " + stage + " target=null");
             return;
         }
         if (session == null || session.system() == null || target.cls() == null) {
-            System.out.println("[TELEM] " + stage + " object=" + target.name() + " class=<null>");
             return;
         }
 
-        System.out.println("[TELEM] " + stage + " object=" + target.name() + " class=" + target.cls().name());
         try {
             var state = target.state(session.system().state());
             for (MAttribute attr : target.cls().allAttributes()) {
@@ -272,7 +267,6 @@ public final class TelemetryApplier {
                     value = state.attributeValue(attr);
                 } catch (Throwable ignored) {
                 }
-                System.out.println("[TELEM]   " + attr.name() + " = " + value);
             }
         } catch (Throwable t) {
             System.out.println("[TELEM]   snapshot failed: " + t.getMessage());

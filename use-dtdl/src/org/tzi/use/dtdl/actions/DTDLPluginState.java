@@ -7,8 +7,13 @@ import org.tzi.use.dtdl.integration.operations.OperationExecutionService;
 import org.tzi.use.dtdl.integration.operations.UseOperationExecutor;
 import org.tzi.use.dtdl.semantic.DTDLContext;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
+import org.tzi.use.dtdl.telemetry.HttpPollingAdapter;
 import org.tzi.use.dtdl.telemetry.TelemetryAdapter;
 import org.tzi.use.dtdl.telemetry.TelemetryEngine;
+import org.tzi.use.dtdl.telemetry.imports.AdapterImportSpec;
+import org.tzi.use.dtdl.telemetry.imports.BindingImportSpec;
+import org.tzi.use.dtdl.telemetry.imports.TelemetryImportReader;
+import org.tzi.use.dtdl.telemetry.imports.TelemetryImportSpec;
 import org.tzi.use.main.Session;
 import org.tzi.use.uml.sys.MSystem;
 import org.tzi.use.uml.sys.events.Event;
@@ -17,9 +22,11 @@ import org.tzi.use.main.ChangeEvent;
 import org.tzi.use.main.ChangeListener;
 import org.tzi.use.uml.sys.events.StatementExecutedEvent;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class DTDLPluginState {
@@ -68,7 +75,8 @@ public final class DTDLPluginState {
         return telemetryEngine;
     }
 
-    public static synchronized void registerAndAttachAdapter(TelemetryAdapter adapter, Session session) {
+
+    public static synchronized void registerAdapter(TelemetryAdapter adapter, Session session) {
         Objects.requireNonNull(adapter, "adapter");
         startTelemetryRuntime(session);
 
@@ -77,12 +85,15 @@ public final class DTDLPluginState {
             throw new IllegalStateException("Adapter already registered: " + adapter.id());
         }
 
-        try {
-            telemetryEngine.attachAdapter(adapter);
-        } catch (Throwable t) {
-            adapters.remove(adapter.id());
-            System.err.println("[DTDLPluginState] Failed to attach adapter " + adapter.id() + ": " + t.getMessage());
-            throw t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t);
+        telemetryEngine.registerAdapter(adapter);
+    }
+
+    public static synchronized void startAllRegisteredAdapters() {
+        if (telemetryEngine == null) {
+            throw new IllegalStateException("Telemetry runtime not started");
+        }
+        for (String id : adapters.keySet()) {
+            telemetryEngine.startAdapter(id);
         }
     }
 
@@ -103,6 +114,72 @@ public final class DTDLPluginState {
                 } catch (Throwable ignored) {}
             }
         }
+    }
+
+    // IMPORT FLOW FOR TELEMETRY
+    public static synchronized int registerTelemetryImport(File file, Session session) {
+        Objects.requireNonNull(file, "file");
+        Objects.requireNonNull(session, "session");
+
+        startTelemetryRuntime(session);
+
+        TelemetryImportSpec spec;
+        try {
+            spec = TelemetryImportReader.read(file);
+        } catch (Exception ex) {
+            throw new RuntimeException("Failed to read telemetry import file: " + ex.getMessage(), ex);
+        }
+
+        if (spec == null || spec.adapters == null || spec.adapters.isEmpty()) {
+            return 0;
+        }
+
+        int registered = 0;
+
+        for (AdapterImportSpec a : spec.adapters) {
+            if (a == null) continue;
+            if (a.url == null || a.url.isBlank()) {
+                throw new IllegalArgumentException("Adapter url is required");
+            }
+
+            String adapterId = (a.id == null || a.id.isBlank())
+                    ? "api-" + UUID.randomUUID().toString().substring(0, 8)
+                    : a.id.trim();
+
+            HttpPollingAdapter adapter = new HttpPollingAdapter(
+                    adapterId,
+                    a.url.trim(),
+                    a.method,
+                    a.intervalMs,
+                    a.deviceId,
+                    a.objectName
+            );
+
+            registerAdapter(adapter, session);
+
+            for (BindingImportSpec b : a.bindings) {
+                if (b == null) continue;
+
+                String bindId = "bind-" + UUID.randomUUID().toString().substring(0, 8);
+                String objectName = b.objectName != null ? b.objectName : a.objectName;
+
+                telemetryEngine.registry().register(
+                        bindId,
+                        new org.tzi.use.dtdl.telemetry.BindingRegistry.Binding(
+                                b.dtmi,
+                                b.telemetryName,
+                                adapter.id(),
+                                objectName,
+                                b.valuePath,
+                                b.fieldPaths
+                        )
+                );
+            }
+
+            registered++;
+        }
+
+        return registered;
     }
 
     public static synchronized Map<String, TelemetryAdapter> getRegisteredAdapters() {
