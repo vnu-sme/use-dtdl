@@ -2,6 +2,7 @@ package org.tzi.use.dtdl.telemetry;
 
 import org.tzi.use.dtdl.gui.telemetry.visualizer.TelemetryUiListener;
 import org.tzi.use.dtdl.gui.telemetry.visualizer.TelemetryUiRecord;
+import org.tzi.use.dtdl.util.telemetry.RobustWindowGate;
 import org.tzi.use.main.Session;
 
 import java.io.Closeable;
@@ -16,6 +17,8 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+
+import static org.tzi.use.dtdl.util.Utils.*;
 
 /**
  * High-level engine wiring adapters, event bus and processor together.
@@ -35,6 +38,16 @@ public final class TelemetryEngine implements AutoCloseable {
     private final Deque<TelemetryUiRecord> uiHistory = new ArrayDeque<>();
     private final CopyOnWriteArrayList<TelemetryUiListener> uiListeners = new CopyOnWriteArrayList<>();
 
+    // detect anomaly
+    private final RobustWindowGate anomalyGate = new RobustWindowGate(
+            envInt("TELEM_MAX_SAMPLES", 9),
+            envInt("TELEM_MIN_SAMPLES", 5),
+            envDouble("TELEM_Z_THRESHOLD", 3.5),
+            envInt("TELEM_CONFIRM_COUNT", 2),
+            envLong("TELEM_MAX_AGE_MS", 120_000L)
+    );
+
+
     public TelemetryEngine(Session session) {
         this.session = session;
         this.bus = new EventBus(this::consume);
@@ -46,8 +59,6 @@ public final class TelemetryEngine implements AutoCloseable {
             // adapters provide raw payloads; bindings map them to telemetry elements.
             int handled = 0;
             System.err.println("[TelemetryEngine] incoming raw event, scanning bindings for adapter=" + ev.source);
-
-            TelemetryApplier applier = new TelemetryApplier(session);
 
             for (BindingRegistry.Binding b : registry.bindingsForAdapter(ev.source)) {
                 // adapter must match if binding specifies one
@@ -62,18 +73,11 @@ public final class TelemetryEngine implements AutoCloseable {
                     for (String d : fact.diagnostics) System.err.println(" diag: " + d);
 
                     // APPLY and CHECK after processing
-                    boolean violated = applier.applyAndCheck(fact);
-
-                    publishUiRecord(buildUiRecord(ev, b, fact, violated,
-                            violated ? "VIOLATION" : (fact.status == TelemetryFact.Status.INVALID ? "INVALID" : "APPLIED"),
-                            fact.diagnostics.isEmpty() ? null : fact.diagnostics.get(fact.diagnostics.size() - 1)));
-
-                    if (violated) {
-                        String details = String.join("\n", fact.diagnostics);
-                        String adapterId = b.adapterId != null ? b.adapterId : ev.source;
-                        TelemetryApplier.handleViolationAndStop(adapterId, details);
-                        // after stopping adapter, continue to next binding
+                    if (!applyWithRobustGate(ev, b, fact)) {
+                        handled++;
+                        continue;
                     }
+
                 } catch (Throwable t) {
                     System.err.println("[TelemetryEngine] processing failed for binding " + b + ": " + t.getMessage());
                     t.printStackTrace(System.err);
@@ -95,18 +99,8 @@ public final class TelemetryEngine implements AutoCloseable {
                 TelemetryFact fact = processor.process(ev);
                 System.err.println("[TelemetryEngine] fact=" + fact);
                 for (String d : fact.diagnostics) System.err.println(" diag: " + d);
-                TelemetryApplier apply = new TelemetryApplier(this.session);
-                boolean violated = apply.applyAndCheck(fact);
 
-                publishUiRecord(buildUiRecord(ev, null, fact, violated,
-                        violated ? "VIOLATION" : (fact.status == TelemetryFact.Status.INVALID ? "INVALID" : "APPLIED"),
-                        fact.diagnostics.isEmpty() ? null : fact.diagnostics.get(fact.diagnostics.size() - 1)));
-
-                if (violated) {
-                    String details = String.join("\n", fact.diagnostics);
-                    String adapterId = ev.source;
-                    TelemetryApplier.handleViolationAndStop(adapterId, details);
-                }
+                applyWithRobustGate(ev, null, fact);
             } catch (Throwable t) {
                 System.err.println("[TelemetryEngine] processing failed: " + t.getMessage());
                 t.printStackTrace(System.err);
@@ -233,6 +227,54 @@ public final class TelemetryEngine implements AutoCloseable {
             } catch (Throwable ignored) {}
         }
     }
+
+    private boolean applyWithRobustGate(TelemetryEvent ev, BindingRegistry.Binding b, TelemetryFact fact) {
+        RobustWindowGate.Decision decision = anomalyGate.inspect(fact);
+
+        if (!decision.allow) {
+            System.out.println("[TELEM][FILTERED] " + "obj=" + fact.matchedObjectName + ", telem=" + fact.telemetryName + ", reason=" + decision.message);
+            if (decision.message != null) {
+                fact.addDiag(decision.message);
+            }
+
+            publishUiRecord(buildUiRecord(ev, b, fact, false, "FILTERED", decision.message));
+            return false;
+        }
+
+        if (decision.message != null) {
+            fact.addDiag(decision.message);
+        }
+
+        boolean violated = new TelemetryApplier(session).applyAndCheck(fact);
+
+        String status;
+        if (decision.confirmed) {
+            status = violated ? "CONFIRMED_ANOMALY_VIOLATION" : "CONFIRMED_ANOMALY";
+        } else {
+            status = violated
+                    ? "VIOLATION"
+                    : (fact.status == TelemetryFact.Status.INVALID ? "INVALID" : "APPLIED");
+        }
+
+        publishUiRecord(buildUiRecord(ev, b, fact, violated, status,
+                fact.diagnostics.isEmpty() ? null : fact.diagnostics.get(fact.diagnostics.size() - 1)));
+
+        System.out.println("[TELEM][APPLY] " + "obj=" + fact.matchedObjectName + ", telem=" + fact.telemetryName + ", value=" + fact.normalizedValue
+                + ", violated=" + violated + ", status=" + status);
+
+        if (violated) {
+            String details = String.join("\n", fact.diagnostics);
+            String adapterId = b != null && b.adapterId != null ? b.adapterId : ev.source;
+            try {
+                TelemetryApplier.handleViolationAndStop(adapterId, details);
+            } catch (RuntimeException ex) {
+                System.err.println("[TelemetryEngine] violation triggered stop: " + ex.getMessage());
+            }
+        }
+        return true;
+    }
+
+
 
     public void addUiListener(TelemetryUiListener listener) {
         if (listener != null) {
