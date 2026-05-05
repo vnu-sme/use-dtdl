@@ -92,7 +92,7 @@ so2Index() : Real =
 
 computeAQI()
 begin
-  declare p25 : Real, p10 : Real, no2 : Real, o3 : Real, co : Real, so2 : Real;
+  declare p25 : Real, p10 : Real, no2 : Real, o3 : Real, co : Real, so2 : Real, lvlSet : Set(AirQualityLevel), lvl : AirQualityLevel;
 
   p25 := self.pm25Index();
   p10 := self.pm10Index();
@@ -122,7 +122,53 @@ begin
   if so2 > self.airQualityIndex then
     self.airQualityIndex := so2
   end;
+
+  lvlSet := self.airQualityLevelOfAirQualityObserved;
+
+  for lvl in lvlSet do
+    lvl.computeAQILevel()
+  end;
+
 end
 
 
+end
+
+
+class AirQualityLevel
+operations
+  computeAQILevel()
+    begin
+      declare obsSet : Set(AirQualityObserved), obs : AirQualityObserved, aqi : Real;
+
+      obsSet := AirQualityObserved.allInstances()
+        ->select(a | a.airQualityLevelOfAirQualityObserved->includes(self));
+
+      if obsSet->notEmpty() then
+        obs := obsSet->any(a | true);
+        aqi := obs.airQualityIndex;
+
+        if aqi <= 50.0 then
+          self.level := #good
+        else
+          if aqi <= 100.0 then
+            self.level := #moderate
+          else
+            if aqi <= 150.0 then
+              self.level := #unhealthyForSensitiveGroups
+            else
+              if aqi <= 200.0 then
+                self.level := #unhealthy
+              else
+                if aqi <= 300.0 then
+                  self.level := #veryUnhealthy
+                else
+                  self.level := #hazardous
+                end
+              end
+            end
+          end
+        end
+      end
+    end
 end
