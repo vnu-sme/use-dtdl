@@ -35,7 +35,7 @@ public final class TelemetryApplier {
     }
 
     @SuppressWarnings("unchecked")
-    public boolean applyAndCheck(TelemetryFact fact) {
+    public boolean applyAndCheck(TelemetryFact fact, boolean shouldCheckConstraints) {
         if (fact == null) return false;
         if (session == null || session.system() == null) return false;
 
@@ -126,6 +126,10 @@ public final class TelemetryApplier {
                 logTargetSnapshot("after-operation-evaluate", target, session);
             } catch (Throwable ignored) {}
 
+            if (!shouldCheckConstraints) {
+                fact.addDiag("Constraint checking skipped during startup warm-up");
+                return false;
+            }
 
             boolean classViolationDetected = false;
             StringWriter classDiagSw = new StringWriter();

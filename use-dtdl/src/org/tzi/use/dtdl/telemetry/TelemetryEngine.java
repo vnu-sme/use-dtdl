@@ -6,17 +6,13 @@ import org.tzi.use.dtdl.util.telemetry.RobustWindowGate;
 import org.tzi.use.main.Session;
 
 import java.io.Closeable;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.Map;
 import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.tzi.use.dtdl.util.Utils.*;
 
@@ -34,6 +30,8 @@ public final class TelemetryEngine implements AutoCloseable {
 
     // track attached adapters by id so we can detach/close them later
     private final ConcurrentHashMap<String, TelemetryAdapter> adapters = new ConcurrentHashMap<>();
+    private final Set<String> warmupConsumedAdapters = ConcurrentHashMap.newKeySet();
+
     private static final int MAX_UI_HISTORY = 500;
     private final Deque<TelemetryUiRecord> uiHistory = new ArrayDeque<>();
     private final CopyOnWriteArrayList<TelemetryUiListener> uiListeners = new CopyOnWriteArrayList<>();
@@ -60,6 +58,8 @@ public final class TelemetryEngine implements AutoCloseable {
             int handled = 0;
             System.err.println("[TelemetryEngine] incoming raw event, scanning bindings for adapter=" + ev.source);
 
+            boolean warmup = ev != null && ev.source != null && warmupConsumedAdapters.add(ev.source);
+
             for (BindingRegistry.Binding b : registry.bindingsForAdapter(ev.source)) {
                 // adapter must match if binding specifies one
                 if (b.adapterId != null && ev.source != null && !b.adapterId.equals(ev.source)) continue;
@@ -73,7 +73,7 @@ public final class TelemetryEngine implements AutoCloseable {
                     for (String d : fact.diagnostics) System.err.println(" diag: " + d);
 
                     // APPLY and CHECK after processing
-                    if (!applyWithRobustGate(ev, b, fact)) {
+                    if (!applyWithRobustGate(ev, b, fact, warmup)) {
                         handled++;
                         continue;
                     }
@@ -100,7 +100,7 @@ public final class TelemetryEngine implements AutoCloseable {
                 System.err.println("[TelemetryEngine] fact=" + fact);
                 for (String d : fact.diagnostics) System.err.println(" diag: " + d);
 
-                applyWithRobustGate(ev, null, fact);
+                applyWithRobustGate(ev, null, fact, warmup);
             } catch (Throwable t) {
                 System.err.println("[TelemetryEngine] processing failed: " + t.getMessage());
                 t.printStackTrace(System.err);
@@ -149,6 +149,8 @@ public final class TelemetryEngine implements AutoCloseable {
             throw new IllegalStateException("Adapter not registered: " + adapterId);
         }
 
+        warmupConsumedAdapters.remove(adapterId);
+
         System.err.println("[ENGINE] Starting adapter: " + adapter.id());
 
         adapter.start(ev -> {
@@ -169,6 +171,9 @@ public final class TelemetryEngine implements AutoCloseable {
     public void detachAdapter(String adapterId) {
         if (adapterId == null) return;
         TelemetryAdapter a = adapters.remove(adapterId);
+
+        warmupConsumedAdapters.remove(adapterId);
+
         if (a != null) {
             try {
                 a.close();
@@ -228,7 +233,7 @@ public final class TelemetryEngine implements AutoCloseable {
         }
     }
 
-    private boolean applyWithRobustGate(TelemetryEvent ev, BindingRegistry.Binding b, TelemetryFact fact) {
+    private boolean applyWithRobustGate(TelemetryEvent ev, BindingRegistry.Binding b, TelemetryFact fact, boolean warmup) {
         RobustWindowGate.Decision decision = anomalyGate.inspect(fact);
 
         if (!decision.allow) {
@@ -245,10 +250,19 @@ public final class TelemetryEngine implements AutoCloseable {
             fact.addDiag(decision.message);
         }
 
-        boolean violated = new TelemetryApplier(session).applyAndCheck(fact);
+
+        boolean violated = false;
+
+        if (warmup) {
+            new TelemetryApplier(session).applyAndCheck(fact, false);
+        } else {
+            violated = new TelemetryApplier(session).applyAndCheck(fact, true);
+        }
 
         String status;
-        if (decision.confirmed) {
+        if (warmup) {
+            status = "WARMUP";
+        } else if (decision.confirmed) {
             status = violated ? "CONFIRMED_ANOMALY_VIOLATION" : "CONFIRMED_ANOMALY";
         } else {
             status = violated
