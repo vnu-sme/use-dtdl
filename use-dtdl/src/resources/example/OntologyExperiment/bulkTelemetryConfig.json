@@ -2,7 +2,7 @@
   "adapters": [
     {
       "id": "w1abc",
-      "url": "https://api.open-meteo.com/v1/forecast?latitude=16.1667&longitude=107.8333&daily=sunset&hourly=wind_direction_10m&current=temperature_2m,relative_humidity_2m,wind_speed_10m,pressure_msl,is_day&timezone=Asia%2FSingapore&start_date=2026-02-11&end_date=2026-02-12",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=16.1667&longitude=107.8333&daily=precipitation_sum&current=wind_speed_10m,temperature_2m,relative_humidity_2m,precipitation,direct_radiation,dew_point_2m,visibility,wind_direction_10m,pressure_msl&timezone=Asia%2FSingapore",
       "method": "GET",
       "intervalMs": 20000,
       "deviceId": "weather-station-1",
@@ -26,13 +26,25 @@
         },
         {
           "telemetryName": "WindDirection",
-          "valuePath": "hourly.wind_direction_10m[32]"
+          "valuePath": "current.wind_direction_10m"
+        },
+        {
+          "telemetryName": "precipitation",
+          "valuePath": "daily.precipitation_sum[0]"
+        },
+        {
+          "telemetryName": "solarRadiation",
+          "valuePath": "current.direct_radiation"
+        },
+        {
+          "telemetryName": "visibility",
+          "valuePath": "current.visibility"
         }
       ]
     },
     {
       "id": "w2abc",
-      "url": "https://api.open-meteo.com/v1/forecast?latitude=16.1667&longitude=107.8333&daily=sunset&hourly=wind_direction_10m&current=temperature_2m,relative_humidity_2m,wind_speed_10m,pressure_msl,is_day&timezone=Asia%2FSingapore&start_date=2026-02-11&end_date=2026-02-12",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&daily=precipitation_sum&current=wind_speed_10m,temperature_2m,relative_humidity_2m,precipitation,direct_radiation,dew_point_2m,visibility,wind_direction_10m,pressure_msl&timezone=Asia/Singapore",
       "method": "GET",
       "intervalMs": 20000,
       "deviceId": "weather-station-2",
@@ -56,7 +68,19 @@
         },
         {
           "telemetryName": "WindDirection",
-          "valuePath": "hourly.wind_direction_10m[0]"
+          "valuePath": "current.wind_direction_10m"
+        },
+        {
+          "telemetryName": "precipitation",
+          "valuePath": "daily.precipitation_sum[0]"
+        },
+        {
+          "telemetryName": "solarRadiation",
+          "valuePath": "current.direct_radiation"
+        },
+        {
+          "telemetryName": "visibility",
+          "valuePath": "current.visibility"
         }
       ]
     },
@@ -108,7 +132,7 @@
     },
     {
       "id": "aq2abc",
-      "url": "https://api.waqi.info/feed/shanghai/?token=458132abd03eac55a97030b3927cfebf7170c342",
+      "url": "https://api.waqi.info/feed/chengdu/?token=458132abd03eac55a97030b3927cfebf7170c342",
       "method": "GET",
       "intervalMs": 13000,
       "deviceId": "aq-station-2",
@@ -154,7 +178,7 @@
     },
     {
       "id": "aq3abc",
-      "url": "https://api.waqi.info/feed/shanghai/?token=458132abd03eac55a97030b3927cfebf7170c342",
+      "url": "https://api.waqi.info/feed/shenzhen/?token=458132abd03eac55a97030b3927cfebf7170c342",
       "method": "GET",
       "intervalMs": 11000,
       "deviceId": "aq-station-3",
@@ -230,7 +254,7 @@
     },
     {
       "id": "water2abc",
-      "url": "https://waterservices.usgs.gov/nwis/iv/?format=json&sites=01646500&parameterCd=00010,00300,00400,63680,00095",
+      "url": "https://waterservices.usgs.gov/nwis/iv/?format=json&sites=09380000&parameterCd=00010,00300,00400,63680,00095",
       "method": "GET",
       "intervalMs": 24000,
       "deviceId": "water-station-2",
@@ -238,23 +262,23 @@
       "bindings": [
         {
           "telemetryName": "O2",
-          "valuePath": "value.timeSeries[2].values[1].value[0].value"
+          "valuePath": "value.timeSeries[2].values[0].value[0].value"
         },
         {
           "telemetryName": "conductivity",
-          "valuePath": "value.timeSeries[1].values[2].value[0].value"
+          "valuePath": "value.timeSeries[1].values[0].value[0].value"
         },
         {
           "telemetryName": "pH",
-          "valuePath": "value.timeSeries[3].values[1].value[0].value"
+          "valuePath": "value.timeSeries[3].values[0].value[0].value"
         },
         {
           "telemetryName": "temperature",
-          "valuePath": "value.timeSeries[0].values[4].value[0].value"
+          "valuePath": "value.timeSeries[0].values[0].value[0].value"
         },
         {
           "telemetryName": "turbidity",
-          "valuePath": "value.timeSeries[4].values[1].value[0].value"
+          "valuePath": "value.timeSeries[4].values[0].value[0].value"
         }
       ]
     },
@@ -278,7 +302,7 @@
     },
     {
       "id": "noise2abc",
-      "url": "https://data.smartdublin.ie/sonitus-api/api/data?username=dublincityapi&password=Xpa5vAQ9ki&monitor=10.1.1.1&start=1776053456&end=1776055556",
+      "url": "https://data.smartdublin.ie/sonitus-api/api/data?username=dublincityapi&password=Xpa5vAQ9ki&monitor=01508&start=1776053456&end=1776055556",
       "method": "POST",
       "intervalMs": 20000,
       "deviceId": "noise-station-2",
