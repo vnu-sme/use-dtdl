@@ -1,0 +1,287 @@
+!create area1 : AreaServed
+!create area2 : AreaServed
+
+!create pole1 : Pole
+!create pole2 : Pole
+
+!create w1 : WeatherObserved
+!create w2 : WeatherObserved
+
+!create pg1 : ParkingGroup
+!create pg2 : ParkingGroup
+
+!create osp1 : OnStreetParking
+!create op1 : OffStreetParking
+
+!create ts1 : TotalSpotNumber
+!create ts2 : TotalSpotNumber
+
+!create ps1 : ParkingSpot
+!create ps2 : ParkingSpot
+!create ps3 : ParkingSpot
+!create ps4 : ParkingSpot
+!create ps5 : ParkingSpot
+!create ps6 : ParkingSpot
+!create ps7 : ParkingSpot
+!create ps8 : ParkingSpot
+!create ps9 : ParkingSpot
+!create ps10 : ParkingSpot
+!create ps11 : ParkingSpot
+!create ps12 : ParkingSpot
+!create ps13 : ParkingSpot
+!create ps14 : ParkingSpot
+!create ps15 : ParkingSpot
+!create ps16 : ParkingSpot
+!create ps17 : ParkingSpot
+!create ps18 : ParkingSpot
+!create ps19 : ParkingSpot
+!create ps20 : ParkingSpot
+!create ps21 : ParkingSpot
+!create ps22 : ParkingSpot
+!create ps23 : ParkingSpot
+!create ps24 : ParkingSpot
+!create ps25 : ParkingSpot
+!create ps26 : ParkingSpot
+!create ps27 : ParkingSpot
+!create ps28 : ParkingSpot
+!create ps29 : ParkingSpot
+!create ps30 : ParkingSpot
+!create ps31 : ParkingSpot
+!create ps32 : ParkingSpot
+!create ps33 : ParkingSpot
+!create ps34 : ParkingSpot
+!create ps35 : ParkingSpot
+!create ps36 : ParkingSpot
+!create ps37 : ParkingSpot
+!create ps38 : ParkingSpot
+!create ps39 : ParkingSpot
+!create ps40 : ParkingSpot
+
+!set area1.areaServed := 'Bai Chay'
+!set area2.areaServed := 'Cau Giay'
+
+!set w1.areaServed := 'Bai Chay'
+!set w1.weatherType := 'EXTREME'
+
+!set w2.areaServed := 'Cau Giay'
+!set w2.weatherType := 'NORMAL'
+
+!set ps1.status := ParkingSpot_status_Enum::free
+!set ps1.category := ParkingSpot_category_Enum::onStreet
+!set ps2.status := ParkingSpot_status_Enum::free
+!set ps2.category := ParkingSpot_category_Enum::onStreet
+!set ps3.status := ParkingSpot_status_Enum::free
+!set ps3.category := ParkingSpot_category_Enum::onStreet
+!set ps4.status := ParkingSpot_status_Enum::free
+!set ps4.category := ParkingSpot_category_Enum::onStreet
+!set ps5.status := ParkingSpot_status_Enum::free
+!set ps5.category := ParkingSpot_category_Enum::onStreet
+!set ps6.status := ParkingSpot_status_Enum::free
+!set ps6.category := ParkingSpot_category_Enum::onStreet
+!set ps7.status := ParkingSpot_status_Enum::free
+!set ps7.category := ParkingSpot_category_Enum::onStreet
+!set ps8.status := ParkingSpot_status_Enum::free
+!set ps8.category := ParkingSpot_category_Enum::onStreet
+!set ps9.status := ParkingSpot_status_Enum::free
+!set ps9.category := ParkingSpot_category_Enum::onStreet
+!set ps10.status := ParkingSpot_status_Enum::free
+!set ps10.category := ParkingSpot_category_Enum::onStreet
+!set ps11.status := ParkingSpot_status_Enum::free
+!set ps11.category := ParkingSpot_category_Enum::onStreet
+!set ps12.status := ParkingSpot_status_Enum::free
+!set ps12.category := ParkingSpot_category_Enum::onStreet
+!set ps13.status := ParkingSpot_status_Enum::free
+!set ps13.category := ParkingSpot_category_Enum::onStreet
+!set ps14.status := ParkingSpot_status_Enum::free
+!set ps14.category := ParkingSpot_category_Enum::onStreet
+!set ps15.status := ParkingSpot_status_Enum::free
+!set ps15.category := ParkingSpot_category_Enum::onStreet
+!set ps16.status := ParkingSpot_status_Enum::free
+!set ps16.category := ParkingSpot_category_Enum::onStreet
+!set ps17.status := ParkingSpot_status_Enum::free
+!set ps17.category := ParkingSpot_category_Enum::onStreet
+!set ps18.status := ParkingSpot_status_Enum::free
+!set ps18.category := ParkingSpot_category_Enum::onStreet
+!set ps19.status := ParkingSpot_status_Enum::free
+!set ps19.category := ParkingSpot_category_Enum::onStreet
+!set ps20.status := ParkingSpot_status_Enum::free
+!set ps20.category := ParkingSpot_category_Enum::onStreet
+!set ps21.status := ParkingSpot_status_Enum::free
+!set ps21.category := ParkingSpot_category_Enum::onStreet
+!set ps22.status := ParkingSpot_status_Enum::free
+!set ps22.category := ParkingSpot_category_Enum::onStreet
+!set ps23.status := ParkingSpot_status_Enum::free
+!set ps23.category := ParkingSpot_category_Enum::onStreet
+
+!set ps24.status := ParkingSpot_status_Enum::free
+!set ps24.category := ParkingSpot_category_Enum::offStreet
+!set ps25.status := ParkingSpot_status_Enum::free
+!set ps25.category := ParkingSpot_category_Enum::offStreet
+!set ps26.status := ParkingSpot_status_Enum::free
+!set ps26.category := ParkingSpot_category_Enum::offStreet
+!set ps27.status := ParkingSpot_status_Enum::free
+!set ps27.category := ParkingSpot_category_Enum::offStreet
+!set ps28.status := ParkingSpot_status_Enum::free
+!set ps28.category := ParkingSpot_category_Enum::offStreet
+!set ps29.status := ParkingSpot_status_Enum::free
+!set ps29.category := ParkingSpot_category_Enum::offStreet
+!set ps30.status := ParkingSpot_status_Enum::free
+!set ps30.category := ParkingSpot_category_Enum::offStreet
+!set ps31.status := ParkingSpot_status_Enum::free
+!set ps31.category := ParkingSpot_category_Enum::offStreet
+!set ps32.status := ParkingSpot_status_Enum::free
+!set ps32.category := ParkingSpot_category_Enum::offStreet
+!set ps33.status := ParkingSpot_status_Enum::free
+!set ps33.category := ParkingSpot_category_Enum::offStreet
+!set ps34.status := ParkingSpot_status_Enum::free
+!set ps34.category := ParkingSpot_category_Enum::offStreet
+!set ps35.status := ParkingSpot_status_Enum::free
+!set ps35.category := ParkingSpot_category_Enum::offStreet
+!set ps36.status := ParkingSpot_status_Enum::free
+!set ps36.category := ParkingSpot_category_Enum::offStreet
+!set ps37.status := ParkingSpot_status_Enum::free
+!set ps37.category := ParkingSpot_category_Enum::offStreet
+!set ps38.status := ParkingSpot_status_Enum::free
+!set ps38.category := ParkingSpot_category_Enum::offStreet
+!set ps39.status := ParkingSpot_status_Enum::free
+!set ps39.category := ParkingSpot_category_Enum::offStreet
+!set ps40.status := ParkingSpot_status_Enum::free
+!set ps40.category := ParkingSpot_category_Enum::offStreet
+
+!set ts1.totalSpotNumber := 23
+!set ts2.totalSpotNumber := 17
+
+!insert (pole1, w1) into Pole_refWeather_WeatherObserved
+!insert (pole2, w2) into Pole_refWeather_WeatherObserved
+
+!insert (ps1, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps2, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps3, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps4, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps5, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps6, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps7, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps8, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps9, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps10, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps11, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps12, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps13, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps14, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps15, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps16, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps17, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps18, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps19, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps20, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps21, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps22, area2) into ParkingSpot_areaServed_AreaServed
+!insert (ps23, area2) into ParkingSpot_areaServed_AreaServed
+
+!insert (ps24, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps25, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps26, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps27, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps28, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps29, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps30, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps31, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps32, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps33, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps34, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps35, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps36, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps37, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps38, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps39, area1) into ParkingSpot_areaServed_AreaServed
+!insert (ps40, area1) into ParkingSpot_areaServed_AreaServed
+
+!insert (ps1, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps2, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps3, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps4, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps5, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps6, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps7, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps8, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps9, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps10, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps11, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps12, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps13, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps14, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps15, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps16, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps17, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps18, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps19, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps20, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps21, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps22, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps23, pg1) into ParkingSpot_refParkingGroup_ParkingGroup
+
+!insert (ps24, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps25, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps26, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps27, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps28, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps29, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps30, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps31, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps32, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps33, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps34, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps35, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps36, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps37, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps38, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps39, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+!insert (ps40, pg2) into ParkingSpot_refParkingGroup_ParkingGroup
+
+!insert (pg1, osp1) into ParkingGroup_refOnStreetParking_OnStreetParking
+!insert (pg2, op1) into ParkingGroup_refOffStreetParking_OffStreetParking
+
+!insert (osp1, ps1) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps2) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps3) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps4) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps5) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps6) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps7) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps8) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps9) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps10) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps11) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps12) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps13) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps14) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps15) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps16) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps17) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps18) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps19) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps20) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps21) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps22) into OnStreetParking_refParkingSpot_ParkingSpot
+!insert (osp1, ps23) into OnStreetParking_refParkingSpot_ParkingSpot
+
+!insert (op1, ps24) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps25) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps26) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps27) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps28) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps29) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps30) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps31) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps32) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps33) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps34) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps35) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps36) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps37) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps38) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps39) into OffStreetParking_refParkingSpot_ParkingSpot
+!insert (op1, ps40) into OffStreetParking_refParkingSpot_ParkingSpot
+
+!insert (osp1, ts1) into OnStreetParking_comp_totalSpotNumber
+!insert (op1, ts2) into OffStreetParking_comp_totalSpotNumber

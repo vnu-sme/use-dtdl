@@ -1,0 +1,88 @@
+{
+  "adapters": [
+    {
+      "id": "w1abc",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=13.5&longitude=146.5&daily=wind_speed_10m_max,precipitation_sum&current=temperature_2m,relative_humidity_2m,direct_radiation,dew_point_2m,visibility,wind_direction_10m,pressure_msl&timezone=Asia/Singapore&start_date=2026-04-11&end_date=2026-04-16",
+      "method": "GET",
+      "intervalMs": 20000,
+      "deviceId": "weather-station-1",
+      "objectName": "w1",
+      "bindings": [
+        {
+          "telemetryName": "atmosphericPressure",
+          "valuePath": "current.pressure_msl"
+        },
+        {
+          "telemetryName": "temperature",
+          "valuePath": "current.temperature_2m"
+        },
+        {
+          "telemetryName": "relativeHumidity",
+          "valuePath": "current.relative_humidity_2m"
+        },
+        {
+          "telemetryName": "WindSpeed",
+          "valuePath": "daily.wind_speed_10m_max[3]"
+        },
+        {
+          "telemetryName": "WindDirection",
+          "valuePath": "current.wind_direction_10m"
+        },
+        {
+          "telemetryName": "precipitation",
+          "valuePath": "daily.precipitation_sum[3]"
+        },
+        {
+          "telemetryName": "solarRadiation",
+          "valuePath": "current.direct_radiation"
+        },
+        {
+          "telemetryName": "visibility",
+          "valuePath": "current.visibility"
+        }
+      ]
+    },
+    {
+      "id": "w2abc",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&daily=precipitation_sum&current=wind_speed_10m,temperature_2m,relative_humidity_2m,precipitation,direct_radiation,dew_point_2m,visibility,wind_direction_10m,pressure_msl&timezone=Asia/Singapore",
+      "method": "GET",
+      "intervalMs": 20000,
+      "deviceId": "weather-station-2",
+      "objectName": "w2",
+      "bindings": [
+        {
+          "telemetryName": "atmosphericPressure",
+          "valuePath": "current.pressure_msl"
+        },
+        {
+          "telemetryName": "temperature",
+          "valuePath": "current.temperature_2m"
+        },
+        {
+          "telemetryName": "relativeHumidity",
+          "valuePath": "current.relative_humidity_2m"
+        },
+        {
+          "telemetryName": "WindSpeed",
+          "valuePath": "current.wind_speed_10m"
+        },
+        {
+          "telemetryName": "WindDirection",
+          "valuePath": "current.wind_direction_10m"
+        },
+        {
+          "telemetryName": "precipitation",
+          "valuePath": "daily.precipitation_sum[0]"
+        },
+        {
+          "telemetryName": "solarRadiation",
+          "valuePath": "current.direct_radiation"
+        },
+        {
+          "telemetryName": "visibility",
+          "valuePath": "current.visibility"
+        }
+      ]
+    }
+  ]
+}
