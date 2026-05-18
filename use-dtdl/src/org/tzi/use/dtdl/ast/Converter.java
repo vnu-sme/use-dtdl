@@ -9,6 +9,8 @@ import org.tzi.use.dtdl.DTDLModel.Interface;
 import org.tzi.use.dtdl.DTDLModel.Property.Property;
 import org.tzi.use.dtdl.DTDLModel.Command.Command;
 import org.tzi.use.dtdl.DTDLModel.Command.CommandPayload;
+import org.tzi.use.dtdl.DTDLModel.Relationship.BidirectionalRelationship;
+import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
 import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
 import org.tzi.use.dtdl.DTDLModel.Component.Component;
 import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
@@ -33,29 +35,32 @@ public final class Converter {
 
         // Phase 1: create Interface shells
         for (ASTInterface a : astIfaces) {
-            Object idObj = a.props.get("@id");
-            if (!(idObj instanceof String id)) continue;
+//            Object idObj = a.props.get("@id");
+//            if (!(idObj instanceof String id)) continue;
 
-            Interface di = new Interface(id);
+            Interface di = new Interface(a.id);
 
-            Object ctxObj = a.props.get("@context");
-            if (ctxObj instanceof String) di.setContext((String) ctxObj);
+//            Object ctxObj = a.props.get("@context");
+//            if (ctxObj instanceof String) di.setContext((String) ctxObj);
+
+            di.setContext(a.context);
 
             di.setDescription(a.description);
             di.setDisplayName(a.displayName);
+            di.setDescription(a.description);
 
-            Object comment = a.props.get("comment");
-            if (comment instanceof String) di.setComment((String) comment);
+//            Object comment = a.props.get("comment");
+//            if (comment instanceof String) di.setComment((String) comment);
 
             model.addInterface(di);
-            ifaceIndex.put(id, di);
+            ifaceIndex.put(a.id, di);
         }
 
         // Phase 2: per-interface schemas
         for (ASTInterface a : astIfaces) {
-            Object idObj = a.props.get("@id");
-            if (!(idObj instanceof String id)) continue;
-            Interface di = model.getInterface(id);
+//            Object idObj = a.props.get("@id");
+//            if (!(idObj instanceof String id)) continue;
+            Interface di = model.getInterface(a.id);
             if (di == null) continue;
 
             if (a.schemas != null) {
@@ -63,7 +68,7 @@ public final class Converter {
                     if (astSchema == null) continue;
                     Object sid = astSchema.props.get("@id");
                     if (!(sid instanceof String sidStr)) continue;
-                    org.tzi.use.dtdl.DTDLModel.Schema.Schema conv = convertSchema(astSchema);
+                    Schema conv = convertSchema(astSchema);
                     if (conv != null) di.addSchema(sidStr, conv);
                 }
             }
@@ -71,9 +76,9 @@ public final class Converter {
 
         // Phase 2.1: resolve 'extends' relationships and populate Interface.extendsInterfaces
         for (ASTInterface a : astIfaces) {
-            Object idObj = a.props.get("@id");
-            if (!(idObj instanceof String ifaceId)) continue;
-            Interface di = model.getInterface(ifaceId);
+//            Object idObj = a.props.get("@id");
+//            if (!(idObj instanceof String ifaceId)) continue;
+            Interface di = model.getInterface(a.id);
             if (di == null) continue;
 
             List<String> parentIds = a.getExtendsList();
@@ -91,16 +96,16 @@ public final class Converter {
                 if (parentIface != null) {
                     di.addExtends(parentIface);
                 } else {
-                    ctx.report("Could not resolve extends parent interface: " + parentId + " for interface " + ifaceId, ifaceId);
+                    ctx.report("Could not resolve extends parent interface: " + parentId + " for interface " + a.id, a.id);
                 }
             }
         }
 
         // Phase 3: contents (properties/telemetries/commands/relationships/components)
         for (ASTInterface a : astIfaces) {
-            Object idObj = a.props.get("@id");
-            if (!(idObj instanceof String ifaceId)) continue;
-            Interface di = model.getInterface(ifaceId);
+//            Object idObj = a.props.get("@id");
+//            if (!(idObj instanceof String ifaceId)) continue;
+            Interface di = model.getInterface(a.id);
             if (di == null) continue;
 
             // properties
@@ -108,7 +113,7 @@ public final class Converter {
                 for (ASTProperty p : a.properties) {
                     if (p == null) continue;
                     String name = p.name;
-                    String id = ifaceId + ":property:" + (name != null ? name : "anon");
+                    String id = a.id + ":property:" + (name != null ? name : "anon");
                     if (p.id != null) id = p.id;
                     Property prop = new Property(id);
                     prop.setGeneralInfo(p.id, p.type, p.comment, p.description, p.displayName);
@@ -124,7 +129,7 @@ public final class Converter {
                 for (ASTTelemetry t : a.telemetries) {
                     if (t == null) continue;
                     String name = t.name;
-                    String id = ifaceId + ":telemetry:" + (name != null ? name : "anon");
+                    String id = a.id + ":telemetry:" + (name != null ? name : "anon");
                     if (t.id != null) id = t.id;
                     Telemetry tel = new Telemetry(id);
                     tel.setGeneralInfo(t.id, t.type, t.comment, t.description, t.displayName);
@@ -139,7 +144,7 @@ public final class Converter {
                 for (ASTCommand c : a.commands) {
                     if (c == null) continue;
                     String name = c.name;
-                    String id = ifaceId + ":command:" + (name != null ? name : "anon");
+                    String id = a.id + ":command:" + (name != null ? name : "anon");
                     if (c.id != null) id = c.id;
                     Command cmd = new Command(id);
                     cmd.setName(name);
@@ -170,7 +175,7 @@ public final class Converter {
                 for (ASTRelationship r : a.relationships) {
                     if (r == null) continue;
                     String name = r.name;
-                    String id = ifaceId + ":relationship:" + (name != null ? name : "anon");
+                    String id = a.id + ":relationship:" + (name != null ? name : "anon");
                     Relationship rel = new Relationship(id);
                     rel.setGeneralInfo(r.id, r.type, r.comment, r.description, r.displayName);
                     rel.setName(name);
@@ -197,7 +202,7 @@ public final class Converter {
                             if (rp == null) continue;
                             String base = rel.getTarget() != null
                                             ? rel.getTarget().getId()
-                                            : ifaceId;
+                                            : a.id;
 
                             String rpId = base + ":prop:" + (rp.name != null ? rp.name : "anon");
 
@@ -213,12 +218,40 @@ public final class Converter {
                 }
             }
 
+            if (a.getBidirectionalRelationships() != null) {
+                for (ASTBidirectionalRelationship r : a.bidirectionalRelationships) {
+                    if (r == null) continue;
+                    String name = r.name;
+                    String id = a.id + ":relationship:" + (name != null ? name : "anon");
+                    BidirectionalRelationship rel = new BidirectionalRelationship(id, r.targetRoleName, r.minMultiplicity, r.maxMultiplicity);
+                    rel.setComment(r.comment);
+                    rel.setDescription(r.description);
+                    rel.setDisplayName(r.displayName);
+                    rel.setName(name);
+                    rel.setWritable(r.writable);
+                    rel.setTargetMinMultiplicity(r.targetMinMultiplicity);
+                    rel.setTargetMaxMultiplicity(r.targetMaxMultiplicity);
+
+                    if (r.targetInterface != null) {
+                        Interface targetIface = model.getInterface(r.targetInterface);
+
+                        if (targetIface == null) {
+                            targetIface = ctx.getInterfaceFromModels(r.targetInterface);
+                        }
+
+                        rel.setTarget(targetIface);
+                    }
+
+                    di.addContent(rel);
+                }
+            }
+
             // components
             if (a.components != null) {
                 for (ASTComponent c : a.components) {
                     if (c == null) continue;
                     String name = c.name;
-                    String id = ifaceId + ":component:" + (name != null ? name : "anon");
+                    String id = a.id + ":component:" + (name != null ? name : "anon");
                     if (c.id != null) id = c.id;
                     Component comp = new Component(id);
                     comp.setGeneralInfo(c.id, c.type, c.comment, c.description, c.displayName);
@@ -243,7 +276,7 @@ public final class Converter {
      * Convert ASTSchema -> model Schema (base type).
      * Uses fully-qualified model class names for schema kinds that clash with Java types.
      */
-    private org.tzi.use.dtdl.DTDLModel.Schema.Schema convertSchema(ASTSchema s) {
+    private Schema convertSchema(ASTSchema s) {
         if (s == null) return null;
 
         // primitive
@@ -289,7 +322,7 @@ public final class Converter {
             if (o.fields != null) {
                 for (ASTField f : o.fields) {
                     if (f == null) continue;
-                    org.tzi.use.dtdl.DTDLModel.Schema.Schema fieldSchema = convertSchema(f.schema);
+                    Schema fieldSchema = convertSchema(f.schema);
                     org.tzi.use.dtdl.DTDLModel.Schema.Object.Field mf =
                             new org.tzi.use.dtdl.DTDLModel.Schema.Object.Field(f.name, fieldSchema);
                     out.addField(mf);
@@ -303,13 +336,13 @@ public final class Converter {
             org.tzi.use.dtdl.DTDLModel.Schema.Map.Map out =
                     new org.tzi.use.dtdl.DTDLModel.Schema.Map.Map();
             if (m.mapKey != null) {
-                org.tzi.use.dtdl.DTDLModel.Schema.Schema kSchema = convertSchema(m.mapKey.schema);
+                Schema kSchema = convertSchema(m.mapKey.schema);
                 org.tzi.use.dtdl.DTDLModel.Schema.Map.MapKey mk =
                         new org.tzi.use.dtdl.DTDLModel.Schema.Map.MapKey(m.mapKey.name, kSchema);
                 out.setMapKey(mk);
             }
             if (m.mapValue != null) {
-                org.tzi.use.dtdl.DTDLModel.Schema.Schema vSchema = convertSchema(m.mapValue.schema);
+                Schema vSchema = convertSchema(m.mapValue.schema);
                 org.tzi.use.dtdl.DTDLModel.Schema.Map.MapValue mv =
                         new org.tzi.use.dtdl.DTDLModel.Schema.Map.MapValue(vSchema);
                 out.setMapValue(mv);
@@ -345,5 +378,27 @@ public final class Converter {
             default -> lower = "string";
         }
         return lower;
+    }
+
+    private Interface resolveInterface(String id) {
+        Interface di = model.getInterface(id);
+        if (di == null) di = ctx.getInterfaceFromModels(id);
+        return di;
+    }
+
+    private void addRelationshipToOwner(Interface owner, String relId, String name, String targetId, int min, int max, boolean writable) {
+        if (owner == null) return;
+
+        Relationship rel = new Relationship(relId);
+        rel.setName(name);
+
+        Interface targetIface = resolveInterface(targetId);
+        rel.setTarget(targetIface);
+
+        rel.setMinMultiplicity(min);
+        rel.setMaxMultiplicity(max);
+        rel.setWritable(writable);
+
+        owner.addContent(rel);
     }
 }

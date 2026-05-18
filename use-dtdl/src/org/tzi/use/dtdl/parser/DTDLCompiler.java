@@ -37,7 +37,7 @@ public class DTDLCompiler {
                 err.println("[DTDLCompiler] No UTF-8 BOM detected.");
             }
 
-            input = new ANTLRInputStream(in);
+            input = new ANTLRInputStream(pin);
             input.name = inName;
         } catch (IOException e) {
             err.println(e.getMessage());

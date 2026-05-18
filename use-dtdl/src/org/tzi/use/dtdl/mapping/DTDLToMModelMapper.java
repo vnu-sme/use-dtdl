@@ -1,6 +1,7 @@
 package org.tzi.use.dtdl.mapping;
 
 import org.tzi.use.dtdl.DTDLModel.*;
+import org.tzi.use.dtdl.DTDLModel.Relationship.BidirectionalRelationship;
 import org.tzi.use.dtdl.DTDLModel.Schema.*;
 import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
 import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumValue;
@@ -9,7 +10,9 @@ import org.tzi.use.dtdl.DTDLModel.Property.Property;
 import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
 import org.tzi.use.dtdl.DTDLModel.Component.Component;
 import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
+import org.tzi.use.dtdl.Main;
 import org.tzi.use.dtdl.actions.DTDLPluginState;
+import org.tzi.use.dtdl.ast.ASTBidirectionalRelationship;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.dtdl.util.Utils;
 import org.tzi.use.parser.SemanticException;
@@ -30,6 +33,7 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 import static org.tzi.use.dtdl.mapping.MapperHelper.*;
+import static org.tzi.use.dtdl.mapping.MapperHelper.multiplicityToString;
 
 public class DTDLToMModelMapper {
     private final DTDLModel dtdl;
@@ -281,42 +285,24 @@ public class DTDLToMModelMapper {
                         if (logWriter != null) logWriter.println("[DTDL->M] skipped attribute (exists) " + p.getName() + " on class " + cls.name());
                     }
 
-                } else if (ce instanceof Relationship) {
+                } else if (ce instanceof Relationship && !(ce instanceof BidirectionalRelationship)) {
                     Relationship r = (Relationship) ce;
                     Interface tgt = r.getTarget();
-                    if (tgt == null) continue;
-                    MClass targetCls = ifaceToClass.get(tgt.getId());
+                    MClass targetCls = resolveTargetClass(tgt, ifaceToClass, registry, api, logWriter);
 
-                    if (targetCls == null && registry != null) {
-                        Optional<String> mapped = registry.getClassNameForDtmi(tgt.getId());
-                        if (mapped.isPresent()) {
-                            targetCls = api.getModel().getClass(mapped.get());
-                            if (targetCls != null) {
-                                ifaceToClass.put(tgt.getId(), targetCls);
-                                if (logWriter != null) logWriter.println("[DTDL->M] resolved relationship target to registry class: " + targetCls.name() + " for dtmi " + tgt.getId());
-                            }
-                        }
-                    }
-
-                    if (targetCls == null) {
-                        if (logWriter != null) logWriter.println("[DTDL->M] could not resolve relationship target for dtmi " + tgt.getId() + " — skipping association");
-                        continue;
-                    }
+                    if (targetCls == null) continue;
 
                     String relName = sanitize(nonNull(r.getName(), "rel"));
 
                     String srcName = sanitize(Utils.getInterfaceDisplayName(iface));
                     String tgtName = sanitize(Utils.getInterfaceDisplayName(tgt));
 
-                    String assocBase = sanitize(srcName + "_" + relName + "_" + tgtName);
-                    String assocName = assocBase;
+                    String assocName = buildAssociationName(api.getModel(), srcName, tgtName, relName, r, ce);
 
-                    while (api.getModel().getAssociation(assocName) != null ||
-                            api.getModel().getAssociationClass(assocName) != null) {
-                        assocName = assocBase + "_" + stableHash(nonNull(r.getId(), relName) + assocName, ce);
-                    }
-
-                    String[] classNames = new String[] { cls.name(), targetCls.name() };
+                    String[] classNames = new String[] {
+                            cls.name(),
+                            targetCls.name()
+                    };
 
                     String[] roleNames = computeRoleNames(cls, targetCls, srcName, tgtName, relName, r);
 
@@ -376,6 +362,43 @@ public class DTDLToMModelMapper {
                         } else {
                             if (logWriter != null) logWriter.println("[DTDL->M] association already exists: " + assocName);
                         }
+                    }
+                } else if (ce instanceof BidirectionalRelationship) {
+                    BidirectionalRelationship r = (BidirectionalRelationship) ce;
+                    Interface tgt = r.getTarget();
+                    MClass targetCls = resolveTargetClass(tgt, ifaceToClass, registry, api, logWriter);
+
+                    if (targetCls == null) continue;
+
+                    String relName = sanitize(nonNull(r.getName(), "rel"));
+
+                    String srcName = sanitize(Utils.getInterfaceDisplayName(iface));
+                    String tgtName = sanitize(Utils.getInterfaceDisplayName(tgt));
+
+                    String assocName = buildAssociationName(api.getModel(), srcName, tgtName, relName, r, ce);
+
+                    String[] classNames = new String[] {
+                            cls.name(),
+                            targetCls.name()
+                    };
+
+                    String[] roleNames =  computeBidirectionalRoleNames(cls, targetCls, r.getName(), r.targetName);
+
+                    String leftMult = multiplicityToString(r.getMinMultiplicity(), r.getMaxMultiplicity());
+                    String rightMult = multiplicityToString(r.targetMinMultiplicity, r.targetMaxMultiplicity);
+
+                    String[] multiplicities = new String[] { leftMult, rightMult };
+                    int[] aggr = new int[] { MAggregationKind.NONE, MAggregationKind.NONE };
+                    boolean[] ordered = new boolean[] { false, false };
+
+                    if (api.getModel().getAssociation(assocName) == null &&
+                            api.getModel().getAssociationClass(assocName) == null) {
+                        api.createAssociation(assocName, classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
+                        if (logWriter != null) logWriter.println("[DTDL->M] created association: " + assocName +
+                                " classes=" + Arrays.toString(classNames) +
+                                " roles=" + Arrays.toString(roleNames));
+                    } else {
+                        if (logWriter != null) logWriter.println("[DTDL->M] association already exists: " + assocName);
                     }
                 } else if (ce instanceof Component) {
                     Component c = (Component) ce;
@@ -458,6 +481,53 @@ public class DTDLToMModelMapper {
                 }
             }
         }
+
+//        for (Interface iface : dtdl.getInterfaces().values()) {
+//            MClass cls = ifaceToClass.get(iface.getId());
+//            if (cls == null) continue;
+//
+//            for (ASTBidirectionalRelationship br : iface.getBidirectionalRelationships()) {
+//                if (br == null) continue;
+//
+//                MClass leftCls = ifaceToClass.get(br.leftOwnerInterfaceId);
+//                MClass rightCls = ifaceToClass.get(br.rightOwnerInterfaceId);
+//
+//                if (leftCls == null || rightCls == null) continue;
+//
+//                String leftRole = sanitize(nonNull(br.leftName, leftCls.nameAsRolename()));
+//                String rightRole = sanitize(nonNull(br.rightName, rightCls.nameAsRolename()));
+//
+//                String leftName = sanitize(Utils.getInterfaceDisplayName(
+//                        dtdl.getInterfaces().get(br.leftOwnerInterfaceId)
+//                ));
+//                String rightName = sanitize(Utils.getInterfaceDisplayName(
+//                        dtdl.getInterfaces().get(br.rightOwnerInterfaceId)
+//                ));
+//
+//                String assocBase = sanitize(leftName + "_" + leftRole + "__" + rightName + "_" + rightRole);
+//                String assocName = assocBase;
+//
+//                while (api.getModel().getAssociation(assocName) != null ||
+//                        api.getModel().getAssociationClass(assocName) != null) {
+//                    assocName = assocBase + "_" + stableHash(assocBase + assocName, br);
+//                }
+//
+//                String[] classNames = new String[] { leftCls.name(), rightCls.name() };
+//                String[] roleNames = new String[] { leftRole, rightRole };
+//                String[] multiplicities = new String[] {
+//                        multiplicityToString(br.leftMinMultiplicity, br.leftMaxMultiplicity),
+//                        multiplicityToString(br.rightMinMultiplicity, br.rightMaxMultiplicity)
+//                };
+//                int[] aggr = new int[] { MAggregationKind.NONE, MAggregationKind.NONE };
+//                boolean[] ordered = new boolean[] { false, false };
+//
+//                if (api.getModel().getAssociation(assocName) == null &&
+//                        api.getModel().getAssociationClass(assocName) == null) {
+//                    api.createAssociation(assocName, classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
+//                }
+//            }
+//
+//        }
     }
 
     private String mapSchemaToTypeName(Schema s) throws UseApiException {

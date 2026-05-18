@@ -18,4 +18,16 @@ public abstract class ASTNode {
             System.out.println("    comment: " + comment);
         }
     }
+
+    public String getComment() {
+        return comment;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
 }

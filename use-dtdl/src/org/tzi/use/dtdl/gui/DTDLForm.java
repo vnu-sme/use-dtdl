@@ -75,7 +75,8 @@ public class DTDLForm extends JDialog {
             @Override
             public void actionPerformed(ActionEvent e) {
                 if (chooser == null) {
-                    chooser = new JFileChooser(Options.getLastDirectory().toString());
+//                    chooser = new JFileChooser(Options.getLastDirectory().toString());
+                    chooser = new JFileChooser("D:\\workspaces\\use\\use-dtdl\\src\\resources\\example"); // adhoc
                     chooser.setDialogTitle("Open DTDL file(s)");
                     chooser.setFileFilter(new ExtFileFilter("json", "DTDL file (json)"));
                 }

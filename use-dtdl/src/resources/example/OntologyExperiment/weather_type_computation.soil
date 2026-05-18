@@ -23,28 +23,28 @@ operations
           )
         )
       )->collect(ps |
-        ps.ParkingGroup_refParkingGroup
+        ps.ParkingGroup_refParkingSpot
       )->flatten()->asSet();
 
     for pg in affectedParkingGroups do
 
-      for osp in pg.OnStreetParking_refOnStreetParking do
+      for osp in pg.OnStreetParking_refParkingGroup do
         for totalSpot in osp.totalSpotNumberOfOnStreetParking do
           totalSpot.totalSpotNumber := 0;
         end;
 
-        for ps in osp.ParkingSpot_refParkingSpot do
+        for ps in osp.ParkingSpot_refOnStreetParking do
           ps.status := ParkingSpot_status_Enum::closed;
         end;
       end;
 
-      for op in pg.OffStreetParking_refOffStreetParking do
+      for op in pg.OffStreetParking_refParkingGroup do
         for totalSpot in op.totalSpotNumberOfOffStreetParking do
             original := totalSpot.totalSpotNumber;
             totalSpot.totalSpotNumber := ((original * 70) / 100).floor();
         end;
 
-        for ps in op.ParkingSpot_refParkingSpot do
+        for ps in op.ParkingSpot_refOffStreetParking do
              ps.status := ParkingSpot_status_Enum::free;
         end;
       end;

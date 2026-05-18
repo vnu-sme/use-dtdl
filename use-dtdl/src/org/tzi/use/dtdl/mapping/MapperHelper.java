@@ -1,6 +1,9 @@
 package org.tzi.use.dtdl.mapping;
 
+import org.tzi.use.api.UseModelApi;
+import org.tzi.use.dtdl.DTDLModel.Interface;
 import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
+import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.uml.mm.MAssociation;
 import org.tzi.use.uml.mm.MAssociationEnd;
 import org.tzi.use.uml.mm.MClass;
@@ -8,7 +11,9 @@ import org.tzi.use.uml.mm.MModel;
 
 import java.io.PrintWriter;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class MapperHelper {
     private MapperHelper() {}
@@ -85,5 +90,74 @@ public final class MapperHelper {
             rightRole = rightRole + "_" + suffix;
 
         return new String[]{leftRole, rightRole};
+    }
+
+    public static String[] computeBidirectionalRoleNames(MClass srcCls, MClass tgtCls, String leftRole, String rightRole) {
+        return new String[]{srcCls + "_" + leftRole, tgtCls + "_" + rightRole};
+    }
+
+    public static MClass resolveTargetClass(
+            Interface tgt,
+            Map<String, MClass> ifaceToClass,
+            DTDLModelRegistry registry,
+            UseModelApi api,
+            PrintWriter logWriter
+    ) {
+        if (tgt == null) return null;
+
+        MClass targetCls = ifaceToClass.get(tgt.getId());
+
+        if (targetCls == null && registry != null) {
+            Optional<String> mapped = registry.getClassNameForDtmi(tgt.getId());
+
+            if (mapped.isPresent()) {
+                targetCls = api.getModel().getClass(mapped.get());
+
+                if (targetCls != null) {
+                    ifaceToClass.put(tgt.getId(), targetCls);
+
+                    if (logWriter != null) {
+                        logWriter.println(
+                                "[DTDL->M] resolved relationship target to registry class: "
+                                        + targetCls.name()
+                                        + " for dtmi "
+                                        + tgt.getId()
+                        );
+                    }
+                }
+            }
+        }
+
+        if (targetCls == null && logWriter != null) {
+            logWriter.println(
+                    "[DTDL->M] could not resolve relationship target for dtmi "
+                            + tgt.getId()
+                            + " — skipping association"
+            );
+        }
+
+        return targetCls;
+    }
+
+    public static String buildAssociationName(
+            MModel model,
+            String srcName,
+            String tgtName,
+            String relName,
+            Relationship r,
+            Object fallback
+    ) {
+        String assocBase = sanitize(srcName + "_" + relName + "_" + tgtName);
+
+        String assocName = assocBase;
+
+        while (model.getAssociation(assocName) != null ||
+                model.getAssociationClass(assocName) != null) {
+
+            assocName = assocBase + "_"
+                    + stableHash(nonNull(r.getId(), relName) + assocName, fallback);
+        }
+
+        return assocName;
     }
 }

@@ -142,7 +142,6 @@ value returns [ASTSchema schema, String text, Object obj]
       }
     ;
 
-/* arrayValue updated to only use arrayItem.obj (no ev/f/p references) */
 arrayValue returns [java.util.List<Object> list]
 @init {
     $list = new java.util.ArrayList<Object>();
@@ -157,10 +156,6 @@ arrayValue returns [java.util.List<Object> list]
 arrayItem returns [Object obj]
     : value { $obj = $value.obj != null ? $value.obj : $value.schema; }
     ;
-
-/* =======================
-   OBJECTS (fixed: jsonObjectValue now expects braces)
-======================= */
 
 // parse an object into a Java map of key -> value (value already converted by 'value' rule)
 objectEntries returns [java.util.Map<String,Object> map]

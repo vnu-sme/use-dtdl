@@ -15,6 +15,7 @@ public class ASTInterface extends ASTNode {
     public String displayName;
     public String context;
     protected List<ASTRelationship> relationships;
+    protected List<ASTBidirectionalRelationship> bidirectionalRelationships;
     protected List<ASTProperty> properties;
     protected List<ASTCommand> commands;
     protected List<ASTComponent> components;
@@ -31,10 +32,23 @@ public class ASTInterface extends ASTNode {
         components = new ArrayList<>();
         telemetries = new ArrayList<>();
         schemas = new ArrayList<>();
+        bidirectionalRelationships = new ArrayList<>();
     }
 
     public void addRelationship(ASTRelationship a) {
         relationships.add(a);
+    }
+
+    public List<ASTRelationship> getRelationships() {
+        return relationships;
+    }
+
+    public void addBidirectionalRelationship(ASTBidirectionalRelationship r) {
+        bidirectionalRelationships.add(r);
+    }
+
+    public List<ASTBidirectionalRelationship> getBidirectionalRelationships() {
+        return bidirectionalRelationships;
     }
 
     public void addProperty(ASTProperty a) {
@@ -92,6 +106,10 @@ public class ASTInterface extends ASTNode {
         System.out.println("--- Relationships ---");
         if (relationships.isEmpty()) System.out.println("  <none>");
         else for (ASTRelationship r : relationships) r.prints();
+
+        System.out.println("--- Bi-directional Relationships ---");
+        if (bidirectionalRelationships.isEmpty()) System.out.println("  <none>");
+        else for (ASTBidirectionalRelationship r : bidirectionalRelationships) r.prints();
 
         System.out.println("--- Properties ---");
         if (properties.isEmpty()) System.out.println("  <none>");
