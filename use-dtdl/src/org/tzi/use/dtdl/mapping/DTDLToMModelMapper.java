@@ -31,6 +31,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.sql.SQLOutput;
 import java.util.*;
 
 import static org.tzi.use.dtdl.mapping.MapperHelper.*;
@@ -235,7 +236,22 @@ public class DTDLToMModelMapper {
                     Interface tgt = r.getTarget();
                     MClass targetCls = ifaceToClass.get(tgt.getId());
 
-                    if (targetCls == null) continue;
+                    // fallback to registry
+                    if (targetCls == null && registry != null) {
+                        Optional<String> mapped = registry.getClassNameForDtmi(tgt.getId());
+                        if (mapped.isPresent()) {
+                            targetCls = api.getModel().getClass(mapped.get());
+                            if (targetCls != null) {
+                                ifaceToClass.put(tgt.getId(), targetCls);
+                                if (logWriter != null) logWriter.println("[DTDL->M] resolved relationship target to registry class: " + targetCls.name() + " for dtmi " + tgt.getId());
+                            }
+                        }
+                    }
+
+                    if (targetCls == null) {
+                        System.out.println("ASSOCIATION ERROR: target class not found for " + tgt.getId() + " for " + r.getName());
+                        continue;
+                    }
 
                     String relName = sanitize(nonNull(r.getName(), "rel"));
 
@@ -303,7 +319,22 @@ public class DTDLToMModelMapper {
                     Interface tgt = r.getTarget();
                     MClass targetCls = ifaceToClass.get(tgt.getId());
 
-                    if (targetCls == null) continue;
+                    // fallback to registry
+                    if (targetCls == null && registry != null) {
+                        Optional<String> mapped = registry.getClassNameForDtmi(tgt.getId());
+                        if (mapped.isPresent()) {
+                            targetCls = api.getModel().getClass(mapped.get());
+                            if (targetCls != null) {
+                                ifaceToClass.put(tgt.getId(), targetCls);
+                                if (logWriter != null) logWriter.println("[DTDL->M] resolved relationship target to registry class: " + targetCls.name() + " for dtmi " + tgt.getId());
+                            }
+                        }
+                    }
+
+                    if (targetCls == null) {
+                        System.out.println("ASSOCIATION ERROR: target class not found for " + tgt.getId() + " for " + r.getName());
+                        continue;
+                    }
 
                     String relName = sanitize(nonNull(r.getName(), "rel"));
 
