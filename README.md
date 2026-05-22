@@ -23,7 +23,13 @@ Chạy file `.bat` để khởi tạo công cụ USE. Màn hình hiển thị nh
 <img width="905" height="654" alt="image" src="https://github.com/user-attachments/assets/17e3eed9-3c4d-415a-8bac-069104997150" />
 
 ### Cài đặt công cụ sau khi chỉnh sửa
-Nếu ta cần sửa plugin `use-dtdl`, ta chỉ cần build lại use-dtdl, sau đó copy file `.jar` vào thư mục `use-assembly/src/main/resources/plugins`, sau đó chạy lại file `.bat` là được. Vì `use-assembly` đọc plugin lúc runtime, không
+Nếu ta cần sửa plugin `use-dtdl`, ta chỉ cần build lại use-dtdl, sau đó copy file `.jar` build được vào thư mục `use-assembly/src/main/resources/plugins`, sau đó chạy lại file `.bat` là được. Vì `use-assembly` đọc plugin lúc runtime, không
 cần phải build lại `use-assembly` nữa.
+
+Lệnh để build lại plugin `use-dtdl`:
+
+```
+mvn clean package -pl use-dtdl -am
+```
 
 
