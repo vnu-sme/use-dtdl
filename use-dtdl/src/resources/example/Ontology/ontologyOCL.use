@@ -1,0 +1,174 @@
+constraints
+
+-- =========================
+-- AIR QUALITY
+-- =========================
+context AirQualityObserved
+inv Valid_AirQuality:
+    self.__tel_temperature >= -50 and self.__tel_temperature <= 60 and
+    self.__tel_relativeHumidity >= 0 and self.__tel_relativeHumidity <= 100 and
+    self.__tel_PM25 >= 0 and
+    self.__tel_PM10 >= 0 and
+    self.__tel_CO >= 0 and
+    self.__tel_NO2 >= 0 and
+    self.__tel_O3 >= 0
+
+
+-- =========================
+-- WEATHER
+-- =========================
+context WeatherObserved
+inv Valid_Weather:
+    self.__tel_temperature >= -50 and self.__tel_temperature <= 60 and
+    self.__tel_relativeHumidity >= 0 and self.__tel_relativeHumidity <= 100 and
+    self.__tel_atmosphericPressure >= 300 and self.__tel_atmosphericPressure <= 1100 and
+    self.__tel_WindSpeed >= 0 and
+    self.__tel_WindDirection >= 0 and self.__tel_WindDirection <= 360 and
+    self.__tel_precipitation >= 0 and self.__tel_precipitation <= 2000 and
+    self.__tel_visibility >= 0 and self.__tel_visibility <= 100000
+
+
+-- =========================
+-- WATER QUALITY
+-- =========================
+context WaterQualityObserved
+inv Valid_WaterQuality:
+    self.__tel_pH >= 0 and self.__tel_pH <= 14 and
+    self.__tel_temperature >= -5 and self.__tel_temperature <= 50 and
+    self.__tel_turbidity >= 0 and
+    self.__tel_conductivity >= 0 and
+    self.__tel_O2 >= 0 and self.__tel_O2 <= 20
+
+
+-- =========================
+-- NOISE
+-- =========================
+context NoiseLevelObserved
+inv Valid_Noise:
+    self.__tel_LAeq >= 0 and
+    self.__tel_LAmax >= 0
+
+
+context AirQualityObserved
+inv AQILevelConsistency:
+  (self.airQualityIndex <= 50.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::good)) and
+  (self.airQualityIndex > 50.0 and self.airQualityIndex <= 100.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::moderate)) and
+  (self.airQualityIndex > 100.0 and self.airQualityIndex <= 150.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::unhealthyForSensitiveGroups)) and
+  (self.airQualityIndex > 150.0 and self.airQualityIndex <= 200.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::unhealthy)) and
+  (self.airQualityIndex > 200.0 and self.airQualityIndex <= 300.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::veryUnhealthy)) and
+  (self.airQualityIndex > 300.0 implies
+      self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::hazardous))
+
+
+context StreetlightControlCabinet
+inv StressForbidsManualMode:
+  let impactedPoles : Set(Pole) =
+    Pole.allInstances()->select(p |
+      p.Streetlight_refStreetlight->exists(sl |
+        sl.StreetlightControlCabinet_refStreetlightControlCabinet->includes(self)
+      )
+    )->asSet()
+  in
+    (impactedPoles->exists(p |
+      p.WeatherObserved_refWeather->exists(w |
+        w.__tel_visibility < 1000.0 or w.__tel_precipitation > 0.0
+      ) or
+      p.AirQualityObserved_refAirQualityObserved->exists(a |
+        a.airQualityIndex > 150.0
+      ) or
+      p.NoiseLevelObserved_refNoiseLevel->exists(n |
+        n.__tel_LAeq > 40.0
+      )
+    )) implies self.workingMode <> StreetlightControlCabinet_workingMode_Enum::manual
+
+context StreetlightGroup
+inv WeatherDrivenNoDayOff:
+  let impactedPoles : Set(Pole) =
+    Pole.allInstances()->select(p |
+      p.Streetlight_refStreetlight->exists(sl |
+        sl.StreetlightGroup_refStreetlightGroup->includes(self)
+      )
+    )->asSet()
+  in
+    (impactedPoles->exists(p |
+      p.WeatherObserved_refWeather->exists(w |
+        w.__tel_visibility < 1000.0 or w.__tel_precipitation > 0.0
+      ) or
+      p.AirQualityObserved_refAirQualityObserved->exists(a |
+        a.airQualityIndex > 150.0
+      ) or
+      p.NoiseLevelObserved_refNoiseLevel->exists(n |
+        n.__tel_LAeq > 40.0
+      )
+    )) implies self.switchingMode <> StreetlightGroup_switchingMode_Enum::dayOFF
+
+context Point_of_Interest
+inv NoAirQualityIncidentDetection:
+  let observations : Set(AirQualityObserved) =
+    AirQualityObserved.allInstances()->select(a |
+      a.Point_of_Interest_refPointOfInterest->notEmpty() and
+      a.Point_of_Interest_refPointOfInterest->any(true) = self
+    )
+  in
+    not (
+      observations->exists(a1 |
+        let sameGroup : Set(AirQualityObserved) =
+          observations->select(a2 |
+            a2.WeatherObserved_refWeatherObserved = a1.WeatherObserved_refWeatherObserved and
+            a2.dateObserved = a1.dateObserved
+          )
+        in
+          let unhealthySensors : Set(Device) =
+            sameGroup->select(a |
+              a.airQualityIndex >= 151.0
+            )->collect(a | a.Device_refDevice)->asSet()
+          in
+            unhealthySensors->size() >= 2
+            or
+            (unhealthySensors->size() = 1 and sameGroup->exists(a | a.airQualityIndex < 151.0))
+      )
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+context Point_of_Interest
+inv AirQualityIncidentDetection:
+  let observations : Set(AirQualityObserved) =
+    AirQualityObserved.allInstances()->select(a |
+      a.Point_of_Interest_refPointOfInterest->notEmpty() and
+      a.Point_of_Interest_refPointOfInterest->any(true) = self
+    )
+  in
+    observations->exists(a1 |
+      let sameGroup : Set(AirQualityObserved) =
+        observations->select(a2 |
+          a2.WeatherObserved_refWeatherObserved = a1.WeatherObserved_refWeatherObserved and
+          a2.dateObserved = a1.dateObserved
+        )
+      in
+        let unhealthySensors : Set(Device) =
+          sameGroup->select(a |
+            a.airQualityIndex >= 151.0
+          )->collect(a | a.Device_refDevice)->asSet()
+        in
+          unhealthySensors->size() >= 2
+          or
+          (unhealthySensors->size() = 1 and sameGroup->exists(a | a.airQualityIndex < 151.0))
+    )

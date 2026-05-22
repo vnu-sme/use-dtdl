@@ -75,9 +75,9 @@
 !insert (pole2, sl2) into Pole_refStreetlight_Streetlight
 !insert (pole3, sl3) into Pole_refStreetlight_Streetlight
 
-!insert (sl1, sg1) into Streetlight_refStreetlightGroup_StreetlightGroup
-!insert (sl2, sg1) into Streetlight_refStreetlightGroup_StreetlightGroup
-!insert (sl3, sg2) into Streetlight_refStreetlightGroup_StreetlightGroup
+!insert (sg1, sl1) into StreetlightGroup_refStreetLight_Streetlight
+!insert (sg1, sl2) into StreetlightGroup_refStreetLight_Streetlight
+!insert (sg2, sl3) into StreetlightGroup_refStreetLight_Streetlight
 
 !insert (sl1, sc1) into Streetlight_refStreetlightControlCabinet_StreetlightControlCabinet
 !insert (sl2, sc1) into Streetlight_refStreetlightControlCabinet_StreetlightControlCabinet
