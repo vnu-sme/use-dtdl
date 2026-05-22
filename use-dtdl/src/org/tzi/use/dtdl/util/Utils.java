@@ -2,6 +2,8 @@ package org.tzi.use.dtdl.util;
 
 import org.tzi.use.dtdl.DTDLModel.Interface;
 
+import java.util.Objects;
+
 public final class Utils {
 
     public static final String TELEMETRY_ATTR_PREFIX = "__tel_";
@@ -40,5 +42,40 @@ public final class Utils {
         }
 
         return id;
+    }
+
+    public static int envInt(String key, int def) {
+        try {
+            return Integer.parseInt(System.getenv().getOrDefault(key, String.valueOf(def)));
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    public static double envDouble(String key, double def) {
+        try {
+            return Double.parseDouble(System.getenv().getOrDefault(key, String.valueOf(def)));
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    public static long envLong(String key, long def) {
+        try {
+            return Long.parseLong(System.getenv().getOrDefault(key, String.valueOf(def)));
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    public static boolean flexibleEquals(Object a, Object b) {
+        if (a instanceof Number na && b instanceof Number nb) {
+            return Double.compare(na.doubleValue(), nb.doubleValue()) == 0;
+        }
+
+        return Objects.equals(
+                String.valueOf(a),
+                String.valueOf(b)
+        );
     }
 }

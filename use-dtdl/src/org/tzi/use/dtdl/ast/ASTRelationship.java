@@ -18,6 +18,10 @@ public class ASTRelationship extends ASTContent {
         properties = new ArrayList<ASTProperty>();
     }
 
+    public boolean noMinMax() {
+        return minMultiplicity == 0 && maxMultiplicity == 0;
+    }
+
     public void prints() {
         System.out.println("=== RELATIONSHIP: " + (name == null ? "<anon>" : name) + "  (id=" + id + ") ===");
         this.printsGeneralInfo();

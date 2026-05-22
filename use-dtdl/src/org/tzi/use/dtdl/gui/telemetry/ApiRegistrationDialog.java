@@ -22,6 +22,7 @@ import org.tzi.use.uml.sys.MObject;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.io.File;
 import java.time.Instant;
 import java.util.*;
 import java.util.List;
@@ -42,6 +43,7 @@ public class ApiRegistrationDialog extends JDialog {
     private final UseRuntimeService useService;
 
     private final JTextField urlField = new JTextField();
+    private final JComboBox<String> methodComboBox = new JComboBox<>(new String[]{"GET", "POST"});
     private final JTextField intervalField = new JTextField("2000");
     private final JComboBox<String> instanceCombo = new JComboBox<>();
     private final JTextField deviceIdField = new JTextField();
@@ -70,10 +72,17 @@ public class ApiRegistrationDialog extends JDialog {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4,4,4,4);
         gbc.fill = GridBagConstraints.HORIZONTAL;
+
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
         form.add(new JLabel("URL"), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
         form.add(urlField, gbc);
+
+        gbc.gridx = 0; gbc.gridy++;
+        form.add(new JLabel("Method"), gbc);
+
+        gbc.gridx = 1;
+        form.add(methodComboBox, gbc);
 
         gbc.gridx = 0; gbc.gridy++; gbc.weightx = 0;
         form.add(new JLabel("Interval ms"), gbc);
@@ -95,7 +104,8 @@ public class ApiRegistrationDialog extends JDialog {
         form.add(new JLabel("Device ID"), gbc);
         gbc.gridx = 1; form.add(deviceIdField, gbc);
 
-        gbc.gridx = 0; gbc.gridy++; form.add(new JLabel("Object Name (override)"), gbc);
+        gbc.gridx = 0; gbc.gridy++;
+        form.add(new JLabel("Object Name (override)"), gbc);
         gbc.gridx = 1; form.add(objectNameField, gbc);
 
         content.add(form, BorderLayout.NORTH);
@@ -117,12 +127,16 @@ public class ApiRegistrationDialog extends JDialog {
         right.add(new JScrollPane(adapterList), BorderLayout.CENTER);
 
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton addBtn = new JButton("Add & Start");
+        JButton addBtn = new JButton("Register");
+        JButton importBtn = new JButton("Import...");
+        JButton startAllBtn = new JButton("Start All");
         JButton stopBtn = new JButton("Stop Selected");
         JButton removeBtn = new JButton("Remove Selected");
         JButton closeBtn = new JButton("Close");
 
         btns.add(addBtn);
+        btns.add(importBtn);
+        btns.add(startAllBtn);
         btns.add(stopBtn);
         btns.add(removeBtn);
         btns.add(closeBtn);
@@ -136,7 +150,9 @@ public class ApiRegistrationDialog extends JDialog {
         // actions
         refreshInstances.addActionListener(e -> populateInstanceCombo());
         instanceCombo.addActionListener(e -> onInstanceSelected());
+        importBtn.addActionListener(e -> onImport());
         addBtn.addActionListener(e -> onAdd());
+        startAllBtn.addActionListener(e -> onStartAll());
         stopBtn.addActionListener(e -> onStopSelected());
         removeBtn.addActionListener(e -> onRemoveSelected());
         closeBtn.addActionListener(e -> dispose());
@@ -194,6 +210,7 @@ public class ApiRegistrationDialog extends JDialog {
         objectFieldPathFields.clear();
 
         if (objectName == null || objectName.isBlank()) {
+            // still has selected combo and objectName
             telemetryPanel.revalidate();
             telemetryPanel.repaint();
             return;
@@ -298,8 +315,6 @@ public class ApiRegistrationDialog extends JDialog {
                 Schema elem = SchemaInputFactory.resolveNamedSchema(arrSch.getElementSchema(), iface);
 
                 if (elem instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object elemObj) {
-                    // treat as object-like: show fields (user should enter JSON path that extracts element field,
-                    // e.g. "items[0].temp" or whichever path syntax JacksonPath supports for their use case)
                     Map<String, JTextField> fieldMap = new LinkedHashMap<>();
                     // add an optional hint row explaining this is per-element field extraction
                     gbc.gridx = 0;
@@ -405,11 +420,12 @@ public class ApiRegistrationDialog extends JDialog {
 
         String id = "api-" + UUID.randomUUID().toString().substring(0,8);
 
-        HttpPollingAdapter adapter = new HttpPollingAdapter(id, url, interval, dev, bindTargetObject);
+        String method = methodComboBox.getSelectedItem().toString();
+        HttpPollingAdapter adapter = new HttpPollingAdapter(id, url, method, interval, dev, bindTargetObject);
 
         try {
             // register and start adapter
-            DTDLPluginState.registerAndAttachAdapter(adapter, session);
+            DTDLPluginState.registerAdapter(adapter, session);
             listModel.addElement(renderAdapterLine(adapter));
 
             // register bindings for entered paths
@@ -453,9 +469,41 @@ public class ApiRegistrationDialog extends JDialog {
                 }
             }
 
-            JOptionPane.showMessageDialog(this, "Adapter started: " + id);
+            JOptionPane.showMessageDialog(this, "Adapter registered: " + id);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Failed to attach adapter:\n" + ex.getMessage());
+        }
+    }
+
+    private void onImport() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Import telemetry registration JSON");
+        int result = chooser.showOpenDialog(this);
+        if (result != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File file = chooser.getSelectedFile();
+        if (file == null || !file.exists()) {
+            JOptionPane.showMessageDialog(this, "Selected file does not exist.");
+            return;
+        }
+
+        try {
+            int count = DTDLPluginState.registerTelemetryImport(file, session);
+            reloadAdapterList();
+            JOptionPane.showMessageDialog(this, "Imported " + count + " adapter(s).");
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Import failed:\n" + ex.getMessage());
+        }
+    }
+
+    private void onStartAll() {
+        try {
+            DTDLPluginState.startAllRegisteredAdapters();
+            JOptionPane.showMessageDialog(this, "All registered adapters started.");
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Failed to start adapters:\n" + ex.getMessage());
         }
     }
 

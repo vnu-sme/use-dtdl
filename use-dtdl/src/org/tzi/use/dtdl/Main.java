@@ -6,7 +6,7 @@ import org.tzi.use.runtime.IPluginRuntime;
 public class Main implements IPlugin {
     @Override
     public String getName() {
-        return "FRSL plugin";
+        return "USE-DTDL plugin";
     }
 
     @Override

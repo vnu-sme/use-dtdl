@@ -1,0 +1,53 @@
+class Pole
+operations
+    applyLightingPolicy()
+    begin
+      declare badWeather : Boolean, crowded : Boolean, isNight : Boolean, sl : Streetlight;
+
+      isNight := self.WeatherObserved_refWeather->exists(w : WeatherObserved | w.__tel_isDay = false);
+      badWeather := self.WeatherObserved_refWeather->exists(w : WeatherObserved | (w.__tel_visibility < 1000.0) or (w.__tel_precipitation > 10.0));
+      crowded := self.CrowdFlowObserved_refCrowdFlow->exists(c : CrowdFlowObserved | c.__tel_peopleCount >= 1500);
+
+      if isNight and crowded and badWeather then
+        for sl in self.Streetlight_refStreetlight do
+          sl.powerState := Streetlight_powerState_Enum::on;
+          sl.illuminanceLevel := 100.0
+        end
+
+      else
+        if isNight then
+          if crowded then
+            for sl in self.Streetlight_refStreetlight do
+              sl.powerState := Streetlight_powerState_Enum::on;
+              sl.illuminanceLevel := 80.0
+            end
+          else
+            if badWeather then
+              for sl in self.Streetlight_refStreetlight do
+                sl.powerState := Streetlight_powerState_Enum::on;
+                sl.illuminanceLevel := 55.0
+              end
+            else
+              for sl in self.Streetlight_refStreetlight do
+                sl.powerState := Streetlight_powerState_Enum::low;
+                sl.illuminanceLevel := 25.0
+              end
+            end
+          end
+
+        else
+          if badWeather then
+            for sl in self.Streetlight_refStreetlight do
+              sl.powerState := Streetlight_powerState_Enum::on;
+              sl.illuminanceLevel := 65.0
+            end
+          else
+            for sl in self.Streetlight_refStreetlight do
+              sl.powerState := Streetlight_powerState_Enum::off;
+              sl.illuminanceLevel := 0.0
+            end
+          end
+        end
+      end
+    end
+end

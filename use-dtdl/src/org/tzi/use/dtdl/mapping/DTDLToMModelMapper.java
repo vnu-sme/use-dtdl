@@ -1,6 +1,8 @@
 package org.tzi.use.dtdl.mapping;
 
 import org.tzi.use.dtdl.DTDLModel.*;
+import org.tzi.use.dtdl.DTDLModel.Command.Command;
+import org.tzi.use.dtdl.DTDLModel.Relationship.BidirectionalRelationship;
 import org.tzi.use.dtdl.DTDLModel.Schema.*;
 import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
 import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumValue;
@@ -9,7 +11,9 @@ import org.tzi.use.dtdl.DTDLModel.Property.Property;
 import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
 import org.tzi.use.dtdl.DTDLModel.Component.Component;
 import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
+import org.tzi.use.dtdl.Main;
 import org.tzi.use.dtdl.actions.DTDLPluginState;
+import org.tzi.use.dtdl.ast.ASTBidirectionalRelationship;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.dtdl.util.Utils;
 import org.tzi.use.parser.SemanticException;
@@ -27,9 +31,11 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.sql.SQLOutput;
 import java.util.*;
 
 import static org.tzi.use.dtdl.mapping.MapperHelper.*;
+import static org.tzi.use.dtdl.mapping.MapperHelper.multiplicityToString;
 
 public class DTDLToMModelMapper {
     private final DTDLModel dtdl;
@@ -52,11 +58,9 @@ public class DTDLToMModelMapper {
     public MModel map() throws UseApiException {
 //        ensurePrimitiveTypes();
         createClassesForInterfaces();
-        createDataTypesForNamedSchemas();
         createAttributesAndAssociations();
         createGeneralizations();
-        registerEnumTypes();
-        // no reflection-based annotation step needed when using registry mapping
+
         return api.getModel();
     }
 
@@ -128,7 +132,7 @@ public class DTDLToMModelMapper {
         }
 
         // Array
-        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Array.Array arr) {
+        if (s instanceof Array arr) {
             return "array:" + schemaKey(arr.getElementSchema());
         }
 
@@ -196,39 +200,6 @@ public class DTDLToMModelMapper {
         }
     }
 
-    private void createDataTypesForNamedSchemas() throws UseApiException {
-        for (Interface iface : dtdl.getInterfaces().values()) {
-            String ifaceDisplay = sanitize(Utils.getInterfaceDisplayName(iface));
-            if (ifaceDisplay == null || ifaceDisplay.isEmpty()) ifaceDisplay = "NamedIface";
-            for (Map.Entry<String, Schema> e : iface.getSchemas().entrySet()) {
-                Schema s = e.getValue();
-                if (s instanceof org.tzi.use.dtdl.DTDLModel.NamedSchema) {
-                    // compute canonical dtName: prefer schema id (DTMI) short segment, fall back to local schema key
-                    String dtName;
-                    if (s.getClass().getSimpleName().equals("NamedSchema")) {
-                        org.tzi.use.dtdl.DTDLModel.NamedSchema ns = (org.tzi.use.dtdl.DTDLModel.NamedSchema) s;
-                        String base = ns.getId() != null && !ns.getId().isEmpty() ? ns.getId() : e.getKey();
-                        // shorten DTMI -> take last segment after ':', replace ';' and separators
-                        int lastColon = base.lastIndexOf(':');
-                        if (lastColon != -1) base = base.substring(lastColon + 1);
-                        base = base.replace(';', '_').replace('.', '_').replace('-', '_');
-                        dtName = sanitize(ifaceDisplay + "_" + base);
-                    } else {
-                        dtName = sanitize(ifaceDisplay + "_" + e.getKey());
-                    }
-                    if (dtName == null || dtName.isEmpty()) dtName = "Named";
-
-                    if (api.getModel().getDataType(dtName) == null) {
-                        api.createDataType(dtName, false);
-                    }
-                    schemaToTypeName.put(s, dtName);
-                    schemaKeyToTypeName.put(schemaKey(s), dtName);
-                    if (logWriter != null) logWriter.println("[DTDL->M] created dataType for named schema: " + dtName + " (iface=" + iface.getId() + ", schemaKey=" + e.getKey() + ")");
-                }
-            }
-        }
-    }
-
     private void createAttributesAndAssociations() throws UseApiException {
         for (Interface iface : dtdl.getInterfaces().values()) {
             MClass cls = ifaceToClass.get(iface.getId());
@@ -238,6 +209,7 @@ public class DTDLToMModelMapper {
                     // create a telemetry attribute on the class, prefix it to mark as telemetry-only
                     String telName = tel.getName();
                     if (telName != null && !telName.isEmpty()) {
+                        // className = room, telemetry = temperature ==> push to create name for schema inside telemetry
                         push(cls.name());
                         push(telName);
                         String tName = mapSchemaToTypeName(tel.getSchema());
@@ -247,46 +219,24 @@ public class DTDLToMModelMapper {
                         // build safe attribute name with prefix and sanitize underlying name
                         String attrName = Utils.TELEMETRY_ATTR_PREFIX + sanitize(telName);
 
-                        boolean exists = false;
-                        for (MAttribute a : cls.allAttributes()) {
-                            if (a.name().equals(attrName)) { exists = true; break; }
-                        }
-                        if (!exists) {
-                            api.createAttributeEx(cls, attrName, api.getType(tName));
-                            if (logWriter != null) logWriter.println("[DTDL->M] added telemetry attribute " + attrName + " : " + tName + " to class " + cls.name());
-                        } else {
-                            if (logWriter != null) logWriter.println("[DTDL->M] skipped telemetry attribute (exists) " + attrName + " on class " + cls.name());
-                        }
+                        createSingleAttribute(cls, attrName, tName);
                     }
-                    // continue with next content element
-                    continue;
-                } else if (ce instanceof Property) {
-                    Property p = (Property) ce;
+                } else if (ce instanceof Property p) {
                     if (p.getName() == null) continue;
-                    push(ifaceToClass.get(iface.getId()).name());
+
+                    // same thing as telemetry above
+                    push(cls.name());
                     push(p.getName());
                     String typeName = mapSchemaToTypeName(p.getSchema());
                     pop();
                     pop();
-                    Type t = api.getType(typeName);
 
-                    boolean attrExists = false;
-                    for (MAttribute a : cls.allAttributes()) {
-                        if (a.name().equals(p.getName())) { attrExists = true; break; }
-                    }
-                    if (!attrExists) {
-                        api.createAttributeEx(cls, p.getName(), t);
-                        if (logWriter != null) logWriter.println("[DTDL->M] added attribute " + p.getName() + " : " + typeName + " to class " + cls.name());
-                    } else {
-                        if (logWriter != null) logWriter.println("[DTDL->M] skipped attribute (exists) " + p.getName() + " on class " + cls.name());
-                    }
-
-                } else if (ce instanceof Relationship) {
-                    Relationship r = (Relationship) ce;
+                    createSingleAttribute(cls, p.getName(), typeName);
+                } else if (ce instanceof Relationship r && !(ce instanceof BidirectionalRelationship)) {
                     Interface tgt = r.getTarget();
-                    if (tgt == null) continue;
                     MClass targetCls = ifaceToClass.get(tgt.getId());
 
+                    // fallback to registry
                     if (targetCls == null && registry != null) {
                         Optional<String> mapped = registry.getClassNameForDtmi(tgt.getId());
                         if (mapped.isPresent()) {
@@ -299,7 +249,7 @@ public class DTDLToMModelMapper {
                     }
 
                     if (targetCls == null) {
-                        if (logWriter != null) logWriter.println("[DTDL->M] could not resolve relationship target for dtmi " + tgt.getId() + " — skipping association");
+                        System.out.println("ASSOCIATION ERROR: target class not found for " + tgt.getId() + " for " + r.getName());
                         continue;
                     }
 
@@ -308,15 +258,12 @@ public class DTDLToMModelMapper {
                     String srcName = sanitize(Utils.getInterfaceDisplayName(iface));
                     String tgtName = sanitize(Utils.getInterfaceDisplayName(tgt));
 
-                    String assocBase = sanitize(srcName + "_" + relName + "_" + tgtName);
-                    String assocName = assocBase;
+                    String assocName = buildAssociationName(api.getModel(), srcName, tgtName, relName, r, ce);
 
-                    while (api.getModel().getAssociation(assocName) != null ||
-                            api.getModel().getAssociationClass(assocName) != null) {
-                        assocName = assocBase + "_" + stableHash(nonNull(r.getId(), relName) + assocName, ce);
-                    }
-
-                    String[] classNames = new String[] { cls.name(), targetCls.name() };
+                    String[] classNames = new String[] {
+                            cls.name(),
+                            targetCls.name()
+                    };
 
                     String[] roleNames = computeRoleNames(cls, targetCls, srcName, tgtName, relName, r);
 
@@ -334,10 +281,7 @@ public class DTDLToMModelMapper {
                         if (api.getModel().getAssociationClass(assocName) == null) {
                             api.createAssociationClass(assocName, false, new String[0], classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
                             if (logWriter != null) logWriter.println("[DTDL->M] created association class: " + assocName +
-                                    " classes=" + Arrays.toString(classNames) +
-                                    " roles=" + Arrays.toString(roleNames));
-                        } else {
-                            if (logWriter != null) logWriter.println("[DTDL->M] association class already exists: " + assocName);
+                                    " classes=" + Arrays.toString(classNames) + " roles=" + Arrays.toString(roleNames));
                         }
 
                         MAssociationClass ac = api.getAssociationClass(assocName);
@@ -360,9 +304,6 @@ public class DTDLToMModelMapper {
                                     pop();
                                     pop();
                                     api.createAttributeEx(ac, rp.getName(), api.getType(ptype));
-                                    if (logWriter != null) logWriter.println("[DTDL->M] added assoc-class property " + rp.getName() + " to " + assocName);
-                                } else {
-                                    if (logWriter != null) logWriter.println("[DTDL->M] skipped assoc-class property (exists) " + rp.getName() + " on " + assocName);
                                 }
                             }
                         }
@@ -371,14 +312,60 @@ public class DTDLToMModelMapper {
                                 api.getModel().getAssociationClass(assocName) == null) {
                             api.createAssociation(assocName, classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
                             if (logWriter != null) logWriter.println("[DTDL->M] created association: " + assocName +
-                                    " classes=" + Arrays.toString(classNames) +
-                                    " roles=" + Arrays.toString(roleNames));
-                        } else {
-                            if (logWriter != null) logWriter.println("[DTDL->M] association already exists: " + assocName);
+                                    " classes=" + Arrays.toString(classNames) + " roles=" + Arrays.toString(roleNames));
                         }
                     }
-                } else if (ce instanceof Component) {
-                    Component c = (Component) ce;
+                } else if (ce instanceof BidirectionalRelationship r) {
+                    Interface tgt = r.getTarget();
+                    MClass targetCls = ifaceToClass.get(tgt.getId());
+
+                    // fallback to registry
+                    if (targetCls == null && registry != null) {
+                        Optional<String> mapped = registry.getClassNameForDtmi(tgt.getId());
+                        if (mapped.isPresent()) {
+                            targetCls = api.getModel().getClass(mapped.get());
+                            if (targetCls != null) {
+                                ifaceToClass.put(tgt.getId(), targetCls);
+                                if (logWriter != null) logWriter.println("[DTDL->M] resolved relationship target to registry class: " + targetCls.name() + " for dtmi " + tgt.getId());
+                            }
+                        }
+                    }
+
+                    if (targetCls == null) {
+                        System.out.println("ASSOCIATION ERROR: target class not found for " + tgt.getId() + " for " + r.getName());
+                        continue;
+                    }
+
+                    String relName = sanitize(nonNull(r.getName(), "rel"));
+
+                    String srcName = sanitize(Utils.getInterfaceDisplayName(iface));
+                    String tgtName = sanitize(Utils.getInterfaceDisplayName(tgt));
+
+                    String assocName = buildAssociationName(api.getModel(), srcName, tgtName, relName, r, ce);
+
+                    String[] classNames = new String[] {
+                            cls.name(),
+                            targetCls.name()
+                    };
+
+                    String[] roleNames =  computeBidirectionalRoleNames(cls, targetCls, r.getName(), r.targetName);
+
+                    String leftMult = multiplicityToString(r.getMinMultiplicity(), r.getMaxMultiplicity());
+                    String rightMult = multiplicityToString(r.targetMinMultiplicity, r.targetMaxMultiplicity);
+
+                    String[] multiplicities = new String[] { leftMult, rightMult };
+                    int[] aggr = new int[] { MAggregationKind.NONE, MAggregationKind.NONE };
+                    boolean[] ordered = new boolean[] { false, false };
+
+                    if (api.getModel().getAssociation(assocName) == null &&
+                            api.getModel().getAssociationClass(assocName) == null) {
+                        api.createAssociation(assocName, classNames, roleNames, multiplicities, aggr, ordered, new String[0][][]);
+                        if (logWriter != null) logWriter.println("[DTDL->M] created association: " + assocName +
+                                " classes=" + Arrays.toString(classNames) + " roles=" + Arrays.toString(roleNames));
+                    } else {
+                        if (logWriter != null) logWriter.println("[DTDL->M] association already exists: " + assocName);
+                    }
+                } else if (ce instanceof Component c) {
                     if (c.getSchemaInterface() == null) continue;
                     MClass compCls = ifaceToClass.get(c.getSchemaInterface().getId());
                     if (compCls == null) {
@@ -394,8 +381,7 @@ public class DTDLToMModelMapper {
                     if (srcDisplay == null || srcDisplay.isEmpty()) srcDisplay = sanitize(iface.getDisplayName());
                     String compDisplay = sanitize(nonNull(c.getName(), compCls.nameAsRolename()));
 
-                    String assocBase = sanitize(srcDisplay + "_comp_" + compDisplay);
-                    String assocName = assocBase;
+                    String assocName = sanitize(srcDisplay + "_comp_" + compDisplay);
                     if (api.getModel().getAssociation(assocName) != null) assocName = assocName + "_" + stableHash(compDisplay, ce);
 
                     String[] classNames = new String[] { ifaceToClass.get(iface.getId()).name(), compCls.name() };
@@ -425,8 +411,7 @@ public class DTDLToMModelMapper {
             MClass cls = ifaceToClass.get(iface.getId());
             if (cls == null) continue;
             for (ContentElement ce : iface.getContents()) {
-                if (ce instanceof org.tzi.use.dtdl.DTDLModel.Command.Command) {
-                    org.tzi.use.dtdl.DTDLModel.Command.Command cmd = (org.tzi.use.dtdl.DTDLModel.Command.Command) ce;
+                if (ce instanceof Command cmd) {
                     VarDeclList varDecls = new VarDeclList(false);
                     List<String> paramNames = new ArrayList<>();
 
@@ -454,9 +439,24 @@ public class DTDLToMModelMapper {
                         try { cls.addOperation(op); } catch (Exception ex) { throw new UseApiException("Failed to add operation", ex); }
                     }
 
+                    // For rule-based operation executions
                     DTDLPluginState.operationCatalog().register(cls.name(), cmd.getName(), paramNames);
                 }
             }
+        }
+    }
+
+    private void createSingleAttribute(MClass cls, String attrName, String typeName) throws UseApiException {
+        // check existed attr that has same name
+        boolean exists = false;
+        for (MAttribute a : cls.allAttributes()) {
+            if (a.name().equals(attrName)) { exists = true; break; }
+        }
+        if (!exists) {
+            api.createAttributeEx(cls, attrName, api.getType(typeName));
+            if (logWriter != null) logWriter.println("[DTDL->M] added telemetry attribute " + attrName + " : " + typeName + " to class " + cls.name());
+        } else {
+            if (logWriter != null) logWriter.println("[DTDL->M] skipped telemetry attribute (exists) " + attrName + " on class " + cls.name());
         }
     }
 
@@ -526,6 +526,7 @@ public class DTDLToMModelMapper {
             schemaPath.clear();
             push(dtName);
 
+            // forcing nested type to be created first and populating caches (schemaToTypeName, schemaKeyToTypeName)
             for (Field f : fields) {
                 push(f.getName());
                 mapSchemaToTypeName(f.getSchema());
@@ -596,6 +597,7 @@ public class DTDLToMModelMapper {
                         }
                     }
 
+                    // build operation body
                     try {
                         StringWriter errBuffer = new StringWriter();
                         PrintWriter errorPrinter = new PrintWriter(errBuffer, true);
@@ -688,10 +690,10 @@ public class DTDLToMModelMapper {
             if (api.getModel().getDataType(enumName) == null) {
                 List<String> lits = new ArrayList<>();
                 for (EnumValue v : e.getValues()) {
-                    if (v.getName() != null && !v.getName().isEmpty()) {
-                        lits.add(v.getName());
-                    } else if (v.getValue() != null) {
+                    if (v.getValue() != null) {
                         lits.add(String.valueOf(v.getValue().raw()));
+                    } else if (v.getName() != null && !v.getName().isEmpty()) {
+                        lits.add(v.getName());
                     }
                 }
                 EnumType et = api.createEnumeration(enumName, lits);
@@ -792,21 +794,16 @@ public class DTDLToMModelMapper {
 
                 if (parent == null) {
                     if (logWriter != null)
-                        logWriter.println("[DTDL->M] Could not resolve parent for extends: " + parentIface.getId());
+                        System.out.println("[DTDL->M] Could not resolve parent for extends: " + parentIface.getId());
                     continue;
                 }
 
                 api.createGeneralization(child.name(), parent.name());
 
                 if (logWriter != null)
-                    logWriter.println("[DTDL->M] created generalization: "
-                            + child.name() + " -> " + parent.name());
+                    logWriter.println("[DTDL->M] created generalization: " + child.name() + " -> " + parent.name());
             }
         }
-    }
-
-    private void registerEnumTypes() {
-        // enums already registered through UseModelApi.createEnumeration during mapSchemaToTypeName
     }
 
     private void addAttributeToDataType(MDataType dt, String attrName, Type attrType) throws UseApiException {
@@ -817,13 +814,10 @@ public class DTDLToMModelMapper {
         }
 
         try {
-            Class<?> attrCls = Class.forName("org.tzi.use.uml.mm.MAttribute");
-            Constructor<?> ctor = attrCls.getDeclaredConstructor(String.class, org.tzi.use.uml.ocl.type.Type.class);
+            Constructor<MAttribute> ctor = MAttribute.class.getDeclaredConstructor(String.class, Type.class);
             ctor.setAccessible(true);
-            Object attr = ctor.newInstance(attrName, attrType);
-            Method addAttr = MDataType.class.getDeclaredMethod("addAttribute", attrCls);
-            addAttr.setAccessible(true);
-            addAttr.invoke(dt, attr);
+            MAttribute attr = ctor.newInstance(attrName, attrType);
+            dt.addAttribute(attr);
         } catch (Exception ex) {
             throw new UseApiException("Failed to add attribute '" + attrName + "' to datatype '" + dt.name() + "'", ex);
         }

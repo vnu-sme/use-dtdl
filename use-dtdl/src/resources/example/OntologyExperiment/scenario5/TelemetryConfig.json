@@ -1,0 +1,124 @@
+{
+  "adapters": [
+    {
+      "id": "w1abc",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=16.1667&longitude=107.8333&daily=precipitation_sum&current=is_day,wind_speed_10m,temperature_2m,relative_humidity_2m,precipitation,direct_radiation,dew_point_2m,visibility,wind_direction_10m&timezone=Asia%2FSingapore",
+      "method": "GET",
+      "intervalMs": 20000,
+      "deviceId": "weather-station-1",
+      "objectName": "w1",
+      "bindings": [
+        {
+          "telemetryName": "atmosphericPressure",
+          "valuePath": "current.pressure_msl"
+        },
+        {
+          "telemetryName": "temperature",
+          "valuePath": "current.temperature_2m"
+        },
+        {
+          "telemetryName": "relativeHumidity",
+          "valuePath": "current.relative_humidity_2m"
+        },
+        {
+          "telemetryName": "WindSpeed",
+          "valuePath": "daily.wind_speed_10m_max[3]"
+        },
+        {
+          "telemetryName": "WindDirection",
+          "valuePath": "current.wind_direction_10m"
+        },
+        {
+          "telemetryName": "precipitation",
+          "valuePath": "daily.precipitation_sum[3]"
+        },
+        {
+          "telemetryName": "solarRadiation",
+          "valuePath": "current.direct_radiation"
+        },
+        {
+          "telemetryName": "visibility",
+          "valuePath": "current.visibility"
+        },
+        {
+          "telemetryName": "isDay",
+          "valuePath": "current.is_day"
+        }
+      ]
+    },
+    {
+      "id": "w2abc",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&daily=precipitation_sum&current=is_day,wind_speed_10m,temperature_2m,relative_humidity_2m,precipitation,direct_radiation,dew_point_2m,visibility,wind_direction_10m,pressure_msl&timezone=Asia/Singapore",
+      "method": "GET",
+      "intervalMs": 20000,
+      "deviceId": "weather-station-2",
+      "objectName": "w2",
+      "bindings": [
+        {
+          "telemetryName": "atmosphericPressure",
+          "valuePath": "current.pressure_msl"
+        },
+        {
+          "telemetryName": "temperature",
+          "valuePath": "current.temperature_2m"
+        },
+        {
+          "telemetryName": "relativeHumidity",
+          "valuePath": "current.relative_humidity_2m"
+        },
+        {
+          "telemetryName": "WindSpeed",
+          "valuePath": "current.wind_speed_10m"
+        },
+        {
+          "telemetryName": "WindDirection",
+          "valuePath": "current.wind_direction_10m"
+        },
+        {
+          "telemetryName": "precipitation",
+          "valuePath": "daily.precipitation_sum[0]"
+        },
+        {
+          "telemetryName": "solarRadiation",
+          "valuePath": "current.direct_radiation"
+        },
+        {
+          "telemetryName": "visibility",
+          "valuePath": "current.visibility"
+        },
+        {
+          "telemetryName": "isDay",
+          "valuePath": "current.is_day"
+        }
+      ]
+    },
+    {
+      "id": "crowded1abc",
+      "url": "https://melbournetestbed.opendatasoft.com/api/explore/v2.1/catalog/datasets/pedestrian-counting-system-past-hour-counts-per-minute/records?where=location_id%3D3&order_by=sensing_datetime%20desc&limit=1",
+      "method": "GET",
+      "intervalMs": 16000,
+      "deviceId": "crowded-observer-1",
+      "objectName": "c1",
+      "bindings": [
+        {
+          "telemetryName": "peopleCount",
+          "valuePath": "total_count"
+        }
+      ]
+    },
+    {
+      "id": "crowded2abc",
+      "url": "https://melbournetestbed.opendatasoft.com/api/explore/v2.1/catalog/datasets/pedestrian-counting-system-past-hour-counts-per-minute/records?where=location_id%3D5&order_by=sensing_datetime%20desc&limit=1",
+      "method": "GET",
+      "intervalMs": 21000,
+      "deviceId": "crowded-observer-2",
+      "objectName": "c2",
+      "bindings": [
+        {
+          "telemetryName": "peopleCount",
+          "valuePath": "total_count"
+        }
+      ]
+    }
+  ]
+}

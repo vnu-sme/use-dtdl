@@ -10,7 +10,6 @@ public class LoadDTDLSpecificationAction implements IPluginActionDelegate {
     @Override
     public void performAction(IPluginAction pluginAction) {
         Session session = pluginAction.getSession();
-        DTDLPluginState.bindSession(session);
         MainWindow mainWindow = pluginAction.getParent();
 
         // Mở form chọn file DTDL
@@ -23,32 +22,3 @@ public class LoadDTDLSpecificationAction implements IPluginActionDelegate {
         return true; // enable even without .use model
     }
 }
-
-//    @Override
-//    public void performAction(IPluginAction pluginAction) {
-//        Session session = pluginAction.getSession();
-//        MainWindow mainWindow = pluginAction.getParent();
-//
-//        MModel mmodel = session.system().model();
-
-//        DTDLModel dtdlModel = new DTDLModel(mmodel.name());
-//        dtdlModel.createDTDLModel(mmodel);
-
-//        DTDLForm form = new DTDLForm(session, mainWindow);
-//        form.setVisible(true);
-
-//        UseModelApi useModelApi = new UseModelApi(pluginAction.getSession().system().model());
-//
-//
-//        try {
-//            System.out.println("create new class and attribute");
-//            useModelApi.createClass("Living", true);
-//            useModelApi.createAttribute("Living", "Age", "String");
-//        } catch (UseApiException e) {
-//            e.printStackTrace();
-//        }
-//
-//        mainWindow.getModelBrowser().setModel(session.system().model());
-
-
-//    }

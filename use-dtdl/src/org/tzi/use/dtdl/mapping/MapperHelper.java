@@ -1,6 +1,10 @@
 package org.tzi.use.dtdl.mapping;
 
+import org.tzi.use.api.UseModelApi;
+import org.tzi.use.dtdl.DTDLModel.Interface;
 import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
+import org.tzi.use.dtdl.actions.DTDLPluginState;
+import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.uml.mm.MAssociation;
 import org.tzi.use.uml.mm.MAssociationEnd;
 import org.tzi.use.uml.mm.MClass;
@@ -8,7 +12,9 @@ import org.tzi.use.uml.mm.MModel;
 
 import java.io.PrintWriter;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class MapperHelper {
     private MapperHelper() {}
@@ -85,5 +91,31 @@ public final class MapperHelper {
             rightRole = rightRole + "_" + suffix;
 
         return new String[]{leftRole, rightRole};
+    }
+
+    public static String[] computeBidirectionalRoleNames(MClass srcCls, MClass tgtCls, String leftRole, String rightRole) {
+        return new String[]{srcCls + "_" + leftRole, tgtCls + "_" + rightRole};
+    }
+
+    public static String buildAssociationName(
+            MModel model,
+            String srcName,
+            String tgtName,
+            String relName,
+            Relationship r,
+            Object fallback
+    ) {
+        String assocBase = sanitize(srcName + "_" + relName + "_" + tgtName);
+
+        String assocName = assocBase;
+
+        while (model.getAssociation(assocName) != null ||
+                model.getAssociationClass(assocName) != null) {
+
+            assocName = assocBase + "_"
+                    + stableHash(nonNull(r.getId(), relName) + assocName, fallback);
+        }
+
+        return assocName;
     }
 }

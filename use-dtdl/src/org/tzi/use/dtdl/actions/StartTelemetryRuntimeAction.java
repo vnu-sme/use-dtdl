@@ -15,50 +15,24 @@ import java.util.concurrent.atomic.AtomicReference;
 
 
 public final class StartTelemetryRuntimeAction implements IPluginActionDelegate {
-    private static final AtomicReference<TelemetryEventListener> uiListenerRef = new AtomicReference<>();
+    private static TelemetryEventListener uiListener;
 
     @Override
     public void performAction(IPluginAction action) {
         MainWindow mainWindow = action.getParent();
         Session s = action.getSession();
-        DTDLPluginState.bindSession(s);
         try {
             // ensure engine running & available
-            TelemetryEngine engine = DTDLPluginState.startTelemetryRuntime(s);
+            TelemetryEngine eng = DTDLPluginState.startTelemetryRuntime(s);
 
             // register UI listener
-            TelemetryEngine eng = DTDLPluginState.telemetryEngine();
-            uiListenerRef.updateAndGet(prev -> {
-                if (prev == null) {
-                    TelemetryEventListener l = (adapterId, message) -> {
-                        SwingUtilities.invokeLater(() -> {
-                            MainWindow mw = MainWindow.instance();
-                            JOptionPane.showMessageDialog(
-                                    mw,
-                                    message,
-                                    "Telemetry stopped",
-                                    JOptionPane.WARNING_MESSAGE
-                            );
-                        });
-                    };
-
-                    // register listener with engine (important!)
-                    if (eng != null) {
-                        try {
-                            eng.addListener(l);
-                        } catch (Throwable t) {
-                            System.err.println("[LISTENER] Failed to add listener to engine: " + t.getMessage());
-                            t.printStackTrace(System.err);
-                        }
-                    } else {
-                        System.err.println("[LISTENER] telemetry engine is null; listener not registered");
-                    }
-
-                    // return the new listener so uiListenerRef gets updated
-                    return l;
+            TelemetryEngine engine = DTDLPluginState.telemetryEngine();
+            if (uiListener == null) {
+                uiListener = createUiListener();
+                if (engine != null) {
+                    engine.addListener(uiListener);
                 }
-                return prev;
-            });
+            }
 
             // open the dialog (modal) so user can add/register HTTP adapters
             ApiRegistrationDialog.showDialog(mainWindow, s);
@@ -72,6 +46,17 @@ public final class StartTelemetryRuntimeAction implements IPluginActionDelegate 
                     JOptionPane.ERROR_MESSAGE
             );
         }
+    }
+
+    private TelemetryEventListener createUiListener() {
+        return (adapterId, message) -> SwingUtilities.invokeLater(() ->
+                JOptionPane.showMessageDialog(
+                        MainWindow.instance(),
+                        message,
+                        "Telemetry stopped",
+                        JOptionPane.WARNING_MESSAGE
+                )
+        );
     }
 
 }

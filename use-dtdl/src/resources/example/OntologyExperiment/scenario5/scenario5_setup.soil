@@ -1,0 +1,45 @@
+!create pole1 : Pole
+!create pole2 : Pole
+-- Pole 1: daytime + crowded
+-- Pole 2: night + rain + not crowded
+
+!create sl1 : Streetlight
+!create sl2 : Streetlight
+!create sl3 : Streetlight
+!create sl4 : Streetlight
+
+!create w1 : WeatherObserved
+!create w2 : WeatherObserved
+
+!create c1 : CrowdFlowObserved
+!create c2 : CrowdFlowObserved
+
+
+
+-- =======================
+-- Streetlight setup
+-- =======================
+
+-- Pole 1 (2 streetlights)
+!insert (pole1, sl1) into Pole_refStreetlight_Streetlight
+!insert (pole1, sl2) into Pole_refStreetlight_Streetlight
+
+-- Pole 2 (2 streetlights)
+!insert (pole2, sl3) into Pole_refStreetlight_Streetlight
+!insert (pole2, sl4) into Pole_refStreetlight_Streetlight
+
+
+-- =======================
+-- Weather links
+-- =======================
+
+!insert (pole1, w1) into Pole_refWeather_WeatherObserved
+!insert (pole2, w2) into Pole_refWeather_WeatherObserved
+
+
+-- =======================
+-- Crowd links
+-- =======================
+
+!insert (pole1, c1) into Pole_refCrowdFlow_CrowdFlowObserved
+!insert (pole2, c2) into Pole_refCrowdFlow_CrowdFlowObserved

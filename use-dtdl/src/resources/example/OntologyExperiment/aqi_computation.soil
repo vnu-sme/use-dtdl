@@ -1,0 +1,174 @@
+class AirQualityObserved
+operations
+pm25Index() : Real =
+  if self.__tel_PM25 <= 12.0 then
+    ((50.0 - 0.0) / (12.0 - 0.0)) * (self.__tel_PM25 - 0.0) + 0.0
+  else if self.__tel_PM25 <= 35.4 then
+    ((100.0 - 51.0) / (35.4 - 12.1)) * (self.__tel_PM25 - 12.1) + 51.0
+  else if self.__tel_PM25 <= 55.4 then
+    ((150.0 - 101.0) / (55.4 - 35.5)) * (self.__tel_PM25 - 35.5) + 101.0
+  else if self.__tel_PM25 <= 150.4 then
+    ((200.0 - 151.0) / (150.4 - 55.5)) * (self.__tel_PM25 - 55.5) + 151.0
+  else if self.__tel_PM25 <= 250.4 then
+    ((300.0 - 201.0) / (250.4 - 150.5)) * (self.__tel_PM25 - 150.5) + 201.0
+  else
+    ((500.0 - 301.0) / (500.4 - 250.5)) * (self.__tel_PM25 - 250.5) + 301.0
+  endif endif endif endif endif
+
+pm10Index() : Real =
+  if self.__tel_PM10 <= 54.0 then
+    ((50.0 - 0.0) / (54.0 - 0.0)) * (self.__tel_PM10 - 0.0) + 0.0
+  else if self.__tel_PM10 <= 154.0 then
+    ((100.0 - 51.0) / (154.0 - 55.0)) * (self.__tel_PM10 - 55.0) + 51.0
+  else if self.__tel_PM10 <= 254.0 then
+    ((150.0 - 101.0) / (254.0 - 155.0)) * (self.__tel_PM10 - 155.0) + 101.0
+  else if self.__tel_PM10 <= 354.0 then
+    ((200.0 - 151.0) / (354.0 - 255.0)) * (self.__tel_PM10 - 255.0) + 151.0
+  else if self.__tel_PM10 <= 424.0 then
+    ((300.0 - 201.0) / (424.0 - 355.0)) * (self.__tel_PM10 - 355.0) + 201.0
+  else
+    ((500.0 - 301.0) / (604.0 - 425.0)) * (self.__tel_PM10 - 425.0) + 301.0
+  endif endif endif endif endif
+
+no2Index() : Real =
+  if self.__tel_NO2 <= 53.0 then
+    ((50.0 - 0.0) / (53.0 - 0.0)) * (self.__tel_NO2 - 0.0) + 0.0
+  else if self.__tel_NO2 <= 100.0 then
+    ((100.0 - 51.0) / (100.0 - 54.0)) * (self.__tel_NO2 - 54.0) + 51.0
+  else if self.__tel_NO2 <= 360.0 then
+    ((150.0 - 101.0) / (360.0 - 101.0)) * (self.__tel_NO2 - 101.0) + 101.0
+  else if self.__tel_NO2 <= 649.0 then
+    ((200.0 - 151.0) / (649.0 - 361.0)) * (self.__tel_NO2 - 361.0) + 151.0
+  else if self.__tel_NO2 <= 1249.0 then
+    ((300.0 - 201.0) / (1249.0 - 650.0)) * (self.__tel_NO2 - 650.0) + 201.0
+  else
+    ((500.0 - 301.0) / (2049.0 - 1250.0)) * (self.__tel_NO2 - 1250.0) + 301.0
+  endif endif endif endif endif
+
+o3Index() : Real =
+  if self.__tel_O3 <= 54.0 then
+    ((50.0 - 0.0) / (54.0 - 0.0)) * (self.__tel_O3 - 0.0) + 0.0
+  else if self.__tel_O3 <= 70.0 then
+    ((100.0 - 51.0) / (70.0 - 55.0)) * (self.__tel_O3 - 55.0) + 51.0
+  else if self.__tel_O3 <= 85.0 then
+    ((150.0 - 101.0) / (85.0 - 71.0)) * (self.__tel_O3 - 71.0) + 101.0
+  else if self.__tel_O3 <= 105.0 then
+    ((200.0 - 151.0) / (105.0 - 86.0)) * (self.__tel_O3 - 86.0) + 151.0
+  else if self.__tel_O3 <= 200.0 then
+    ((300.0 - 201.0) / (200.0 - 106.0)) * (self.__tel_O3 - 106.0) + 201.0
+  else
+    ((500.0 - 301.0) / (604.0 - 201.0)) * (self.__tel_O3 - 201.0) + 301.0
+  endif endif endif endif endif
+
+coIndex() : Real =
+  if self.__tel_CO <= 4.4 then
+    ((50.0 - 0.0) / (4.4 - 0.0)) * (self.__tel_CO - 0.0) + 0.0
+  else if self.__tel_CO <= 9.4 then
+    ((100.0 - 51.0) / (9.4 - 4.5)) * (self.__tel_CO - 4.5) + 51.0
+  else if self.__tel_CO <= 12.4 then
+    ((150.0 - 101.0) / (12.4 - 9.5)) * (self.__tel_CO - 9.5) + 101.0
+  else if self.__tel_CO <= 15.4 then
+    ((200.0 - 151.0) / (15.4 - 12.5)) * (self.__tel_CO - 12.5) + 151.0
+  else if self.__tel_CO <= 30.4 then
+    ((300.0 - 201.0) / (30.4 - 15.5)) * (self.__tel_CO - 15.5) + 201.0
+  else
+    ((500.0 - 301.0) / (50.4 - 30.5)) * (self.__tel_CO - 30.5) + 301.0
+  endif endif endif endif endif
+
+so2Index() : Real =
+  if self.__tel_SO2 <= 35.0 then
+    ((50.0 - 0.0) / (35.0 - 0.0)) * (self.__tel_SO2 - 0.0) + 0.0
+  else if self.__tel_SO2 <= 75.0 then
+    ((100.0 - 51.0) / (75.0 - 36.0)) * (self.__tel_SO2 - 36.0) + 51.0
+  else if self.__tel_SO2 <= 185.0 then
+    ((150.0 - 101.0) / (185.0 - 76.0)) * (self.__tel_SO2 - 76.0) + 101.0
+  else if self.__tel_SO2 <= 304.0 then
+    ((200.0 - 151.0) / (304.0 - 186.0)) * (self.__tel_SO2 - 186.0) + 151.0
+  else if self.__tel_SO2 <= 604.0 then
+    ((300.0 - 201.0) / (604.0 - 305.0)) * (self.__tel_SO2 - 305.0) + 201.0
+  else
+    ((500.0 - 301.0) / (1004.0 - 605.0)) * (self.__tel_SO2 - 605.0) + 301.0
+  endif endif endif endif endif
+
+computeAQI()
+begin
+  declare p25 : Real, p10 : Real, no2 : Real, o3 : Real, co : Real, so2 : Real, lvlSet : Set(AirQualityLevel), lvl : AirQualityLevel;
+
+  p25 := self.pm25Index();
+  p10 := self.pm10Index();
+  no2 := self.no2Index();
+  o3 := self.o3Index();
+  co := self.coIndex();
+  so2 := self.so2Index();
+
+  self.airQualityIndex := p25;
+
+  if p10 > self.airQualityIndex then
+    self.airQualityIndex := p10
+  end;
+
+  if no2 > self.airQualityIndex then
+    self.airQualityIndex := no2
+  end;
+
+  if o3 > self.airQualityIndex then
+    self.airQualityIndex := o3
+  end;
+
+  if co > self.airQualityIndex then
+    self.airQualityIndex := co
+  end;
+
+  if so2 > self.airQualityIndex then
+    self.airQualityIndex := so2
+  end;
+
+  lvlSet := self.airQualityLevelOfAirQualityObserved;
+
+  for lvl in lvlSet do
+    lvl.computeAQILevel()
+  end;
+
+end
+
+
+end
+
+
+class AirQualityLevel
+operations
+  computeAQILevel()
+    begin
+      declare obsSet : Set(AirQualityObserved), obs : AirQualityObserved, aqi : Real;
+
+      obsSet := AirQualityObserved.allInstances()
+        ->select(a | a.airQualityLevelOfAirQualityObserved->includes(self));
+
+      if obsSet->notEmpty() then
+        obs := obsSet->any(a | true);
+        aqi := obs.airQualityIndex;
+
+        if aqi <= 50.0 then
+          self.level := #good
+        else
+          if aqi <= 100.0 then
+            self.level := #moderate
+          else
+            if aqi <= 150.0 then
+              self.level := #unhealthyForSensitiveGroups
+            else
+              if aqi <= 200.0 then
+                self.level := #unhealthy
+              else
+                if aqi <= 300.0 then
+                  self.level := #veryUnhealthy
+                else
+                  self.level := #hazardous
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+end

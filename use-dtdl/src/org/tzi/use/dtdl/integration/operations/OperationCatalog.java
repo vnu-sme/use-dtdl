@@ -1,18 +1,12 @@
 package org.tzi.use.dtdl.integration.operations;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class OperationCatalog {
 
@@ -32,7 +26,7 @@ public final class OperationCatalog {
         }
 
         public static String key(String className, String operationName) {
-            return String.valueOf(className) + "::" + String.valueOf(operationName);
+            return className + "::" + operationName;
         }
 
         @Override
@@ -61,7 +55,7 @@ public final class OperationCatalog {
                 out.add(d);
             }
         }
-        out.sort((a, b) -> a.operationName.compareToIgnoreCase(b.operationName));
+
         return out;
     }
 

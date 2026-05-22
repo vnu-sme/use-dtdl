@@ -214,4 +214,14 @@ public final class DTDLModelRegistry {
         if (dtmi == null) return false;
         return dtmiToClassName.containsKey(dtmi);
     }
+
+    public String findDTMIByClass(String className) {
+        for (Map.Entry<String, String> entry : dtmiToClassName.entrySet()) {
+            if (entry.getValue().equals(className)) {
+                return entry.getKey();
+            }
+        }
+
+        return null;
+    }
 }

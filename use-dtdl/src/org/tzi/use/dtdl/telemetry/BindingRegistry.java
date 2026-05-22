@@ -42,13 +42,6 @@ public final class BindingRegistry {
             this.fieldPaths = fieldPaths == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(fieldPaths));
         }
 
-        public boolean matches(String dtmi, String telemetryName, String adapterId) {
-            if (this.adapterId != null && adapterId != null && !this.adapterId.equals(adapterId)) return false;
-            if (this.dtmi != null && dtmi != null && !this.dtmi.equals(dtmi)) return false;
-            if (this.telemetryName != null && telemetryName != null && !this.telemetryName.equals(telemetryName)) return false;
-            return true;
-        }
-
         @Override
         public String toString() {
             return "Binding{" + dtmi + ":" + telemetryName +
@@ -79,23 +72,6 @@ public final class BindingRegistry {
 
     public Map<String,Binding> all() {
         return Collections.unmodifiableMap(bindings);
-    }
-
-
-    public Optional<Binding> find(String dtmi, String telemetryName, String adapterId) {
-        // prefer strongest exact match: adapterId + telemetryName + dtmi
-        for (Binding b : bindings.values()) {
-            if (Objects.equals(b.adapterId, adapterId)
-                    && Objects.equals(b.telemetryName, telemetryName)
-                    && Objects.equals(b.dtmi, dtmi)) {
-                return Optional.of(b);
-            }
-        }
-        // fallback: any binding that matches per matches() rules
-        for (Binding b : bindings.values()) {
-            if (b.matches(dtmi, telemetryName, adapterId)) return Optional.of(b);
-        }
-        return Optional.empty();
     }
 
 

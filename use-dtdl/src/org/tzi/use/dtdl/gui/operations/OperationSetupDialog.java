@@ -246,6 +246,7 @@ public final class OperationSetupDialog extends JDialog {
             }
         }
 
+        // restore user selection before refresh
         restoreSelection(manualObjectCombo, previousManual);
         restoreSelection(ruleObjectCombo, previousRule);
 
@@ -285,12 +286,6 @@ public final class OperationSetupDialog extends JDialog {
         for (OperationCatalog.OperationDescriptor d : catalog.operationsForClass(className)) {
             manualOperationCombo.addItem(d.operationName);
         }
-
-        if (manualOperationCombo.getItemCount() == 0) {
-            for (String op : classOperationNames(obj.cls())) {
-                manualOperationCombo.addItem(op);
-            }
-        }
     }
 
     private void refreshRuleOperations() {
@@ -310,41 +305,6 @@ public final class OperationSetupDialog extends JDialog {
         for (OperationCatalog.OperationDescriptor d : catalog.operationsForClass(className)) {
             ruleOperationCombo.addItem(d.operationName);
         }
-
-        if (ruleOperationCombo.getItemCount() == 0) {
-            for (String op : classOperationNames(obj.cls())) {
-                ruleOperationCombo.addItem(op);
-            }
-        }
-    }
-
-    private List<String> classOperationNames(MClass cls) {
-        try {
-            var m = cls.getClass().getMethod("operations");
-            Object r = m.invoke(cls);
-            if (r instanceof java.util.Collection<?> c) {
-                java.util.ArrayList<String> out = new java.util.ArrayList<>();
-                for (Object o : c) {
-                    if (o == null) continue;
-                    try {
-                        var nameMethod = o.getClass().getMethod("name");
-                        Object v = nameMethod.invoke(o);
-                        if (v != null) out.add(String.valueOf(v));
-                    } catch (Throwable ignored) {
-                        try {
-                            var field = o.getClass().getDeclaredField("fName");
-                            field.setAccessible(true);
-                            Object v = field.get(o);
-                            if (v != null) out.add(String.valueOf(v));
-                        } catch (Throwable ignored2) {
-                        }
-                    }
-                }
-                return out;
-            }
-        } catch (Throwable ignored) {
-        }
-        return List.of();
     }
 
     private void runManualOperation() {

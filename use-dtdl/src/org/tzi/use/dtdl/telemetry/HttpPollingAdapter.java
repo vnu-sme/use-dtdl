@@ -7,6 +7,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -31,13 +32,15 @@ public final class HttpPollingAdapter implements TelemetryAdapter {
     private final long intervalMs;
     private final String deviceId;
     private final String objectName;
+    private final String method;
 
     private final HttpClient client;
     private final ScheduledExecutorService scheduler;
     private final AtomicReference<Consumer<TelemetryEvent>> handler = new AtomicReference<>();
     private final AtomicReference<ScheduledFuture<?>> running = new AtomicReference<>();
 
-    public HttpPollingAdapter(String id, String url, long intervalMs, String deviceId, String objectName) {
+    public HttpPollingAdapter(String id, String url, String method, long intervalMs, String deviceId, String objectName) {
+        this.method = method == null ? "GET" : method.toUpperCase();
         this.id = Objects.requireNonNull(id, "id");
         this.url = Objects.requireNonNull(url, "url");
         if (intervalMs < 100) throw new IllegalArgumentException("intervalMs too small");
@@ -72,13 +75,19 @@ public final class HttpPollingAdapter implements TelemetryAdapter {
 
     private void pollOnce() {
         try {
-            HttpRequest req = HttpRequest.newBuilder()
-                    .GET()
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .timeout(java.time.Duration.ofSeconds(10))
-                    .build();
+                    .timeout(Duration.ofSeconds(10));
 
-            System.err.println("[HTTP] GET " + url);
+            if ("POST".equalsIgnoreCase(method)) {
+                builder.POST(HttpRequest.BodyPublishers.noBody());
+            } else {
+                builder.GET();
+            }
+
+            HttpRequest req = builder.build();
+
+            System.err.println("[HTTP] " + url);
 
             HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
             System.err.println("[HTTP] Response " + resp.statusCode() + " from " + url);

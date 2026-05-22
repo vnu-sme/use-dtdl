@@ -1,0 +1,78 @@
+-- Get all Poles with extreme weather, check for ParkingSpot that has the same area served as that extremePoles, if yes then we get the ParkingGroup of that ParkingSpot
+-- Then process to apply policy shutdown off street parking, reduce on street parking
+class ParkingGroup
+operations
+  applyExtremeWeatherParkingPolicy()
+  begin
+
+    declare extremePoles : Set(Pole),
+            affectedParkingGroups : Set(ParkingGroup), original : Integer;
+
+    extremePoles :=
+      Pole.allInstances()->select(p |
+        p.WeatherObserved_refWeather->exists(w | w.weatherType = 'EXTREME')
+      )->asSet();
+
+    affectedParkingGroups :=
+      ParkingSpot.allInstances()->select(ps |
+        ps.AreaServed_areaServed->exists(a |
+          extremePoles->exists(p |
+            p.WeatherObserved_refWeather->exists(w |
+              w.weatherType = 'EXTREME' and w.areaServed = a.areaServed
+            )
+          )
+        )
+      )->collect(ps |
+        ps.ParkingGroup_refParkingSpot
+      )->flatten()->asSet();
+
+    for pg in affectedParkingGroups do
+
+      for osp in pg.OnStreetParking_refParkingGroup do
+        for totalSpot in osp.totalSpotNumberOfOnStreetParking do
+          totalSpot.totalSpotNumber := 0;
+        end;
+
+        for ps in osp.ParkingSpot_refOnStreetParking do
+          ps.status := ParkingSpot_status_Enum::closed;
+        end;
+      end;
+
+      for op in pg.OffStreetParking_refParkingGroup do
+        for totalSpot in op.totalSpotNumberOfOffStreetParking do
+            original := totalSpot.totalSpotNumber;
+            totalSpot.totalSpotNumber := ((original * 70) / 100).floor();
+        end;
+
+        for ps in op.ParkingSpot_refOffStreetParking do
+             ps.status := ParkingSpot_status_Enum::free;
+        end;
+      end;
+
+    end;
+
+  end
+end
+
+class WeatherObserved
+operations
+    checkExtreme()
+    begin
+        declare isExtreme : Boolean, warningScore : Integer;
+
+        isExtreme := (self.__tel_WindSpeed >= 103) or
+                     (self.__tel_precipitation >= 150) or
+                     (self.__tel_visibility <= 50);
+
+        warningScore :=
+            (if self.__tel_temperature >= 41 then 1 else 0 endif)
+          + (if self.__tel_WindSpeed >= 88 then 1 else 0 endif)
+          + (if self.__tel_precipitation >= 100 then 1 else 0 endif)
+          + (if self.__tel_visibility <= 200 then 1 else 0 endif);
+
+        self.weatherType := 'NORMAL';
+        if warningScore >= 2 then self.weatherType := 'WARNING' end;
+        if isExtreme then self.weatherType := 'EXTREME' end;
+    end
+
+end

@@ -11,7 +11,6 @@ public class OpenOperationSetupAction implements IPluginActionDelegate {
     public void performAction(IPluginAction pluginAction) {
         Session session = pluginAction.getSession();
         MainWindow parent = pluginAction.getParent();
-        DTDLPluginState.bindSession(session);
         OperationSetupDialog dlg = new OperationSetupDialog(parent, session);
         dlg.setVisible(true);
     }

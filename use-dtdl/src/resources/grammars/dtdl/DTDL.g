@@ -46,10 +46,6 @@ model returns [ASTInterface n]
       EOF
     ;
 
-/* =======================
-   INTERFACE BODY
-======================= */
-
 interfaceFields[ASTInterface iface]
     :
       interfaceField[iface] (COMMA interfaceField[iface])*
@@ -110,10 +106,6 @@ interfaceField[ASTInterface iface]
       }
     ;
 
-/* =======================
-   VALUES
-======================= */
-
 value returns [ASTSchema schema, String text, Object obj]
     : s=STRING
       { $text = stripQuotes($s.text); $obj = $text; }
@@ -142,7 +134,6 @@ value returns [ASTSchema schema, String text, Object obj]
       }
     ;
 
-/* arrayValue updated to only use arrayItem.obj (no ev/f/p references) */
 arrayValue returns [java.util.List<Object> list]
 @init {
     $list = new java.util.ArrayList<Object>();
@@ -157,10 +148,6 @@ arrayValue returns [java.util.List<Object> list]
 arrayItem returns [Object obj]
     : value { $obj = $value.obj != null ? $value.obj : $value.schema; }
     ;
-
-/* =======================
-   OBJECTS (fixed: jsonObjectValue now expects braces)
-======================= */
 
 // parse an object into a Java map of key -> value (value already converted by 'value' rule)
 objectEntries returns [java.util.Map<String,Object> map]
@@ -214,12 +201,13 @@ jsonObjectValue returns [ASTSchema schema, Object obj]
 
             if (primaryType != null) {
                 // Schema types we care about now
-                if ("Enum".equals(primaryType) || "Object".equals(primaryType) || "Map".equals(primaryType)) {
+                if ("Enum".equals(primaryType) || "Object".equals(primaryType) || "Map".equals(primaryType) || "Array".equals(primaryType)) {
                     ASTSchema s;
                     switch (primaryType) {
                         case "Enum": s = new ASTEnum(); break;
                         case "Object": s = new ASTObject(); break;
                         case "Map": s = new ASTMap(); break;
+                        case "Array": s = new ASTArray(); break;
                         default: s = null; break;
                     }
                     if (s != null) {
@@ -278,10 +266,6 @@ jsonObjectValue returns [ASTSchema schema, Object obj]
         }
       }
     ;
-
-/* =======================
-   LEXER
-======================= */
 
 LBRACE  : '{' ;
 RBRACE  : '}' ;
