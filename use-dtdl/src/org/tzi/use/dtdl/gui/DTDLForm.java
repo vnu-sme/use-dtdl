@@ -218,42 +218,6 @@ public class DTDLForm extends JDialog {
 
             MModel mappedModel = mapper.map();
 
-            // debug: print associations present in session/system model (the model our UI will get)
-            MModel mm = session.system().model();
-            System.out.println("[DTDLForm] Model after mapping: " + mm.name()
-                    + " (dataTypes=" + mm.dataTypes().size()
-                    + ", classes=" + mm.classes().size()
-                    + ", associations=" + mm.associations().size() + ")");
-
-            for (MAssociation a : mm.associations()) {
-                try {
-                    List<MAssociationEnd> ends = a.associationEnds();
-                    String e0cls = ends.size()>0 && ends.get(0).cls()!=null ? ends.get(0).cls().name() : "<null>";
-                    String e0role = ends.size()>0 ? ends.get(0).name() : "<null>";
-                    String e1cls = ends.size()>1 && ends.get(1).cls()!=null ? ends.get(1).cls().name() : "<null>";
-                    String e1role = ends.size()>1 ? ends.get(1).name() : "<null>";
-                    System.out.println("[DTDLForm] association: " + a.name() + "  ends: " + e0cls + ":" + e0role + " <-> " + e1cls + ":" + e1role);
-                } catch (Throwable t) {
-                    t.printStackTrace(logWriter);
-                }
-            }
-
-//            System.out.println("[DTDLForm] classes and annotations:");
-//            for (MClass c : mm.classes()) {
-//                StringBuilder sb = new StringBuilder();
-//                sb.append(" - ").append(c.name()).append(" annotations=");
-//                try {
-//                    // try common getter names
-//                    Method m = c.getClass().getMethod("annotations");
-//                    Object anns = m.invoke(c);
-//                    sb.append(String.valueOf(anns));
-//                } catch (Throwable t) {
-//                    // fallback: iterate possible methods
-//                    sb.append("<no-annotations-method>");
-//                }
-//                System.out.println(sb.toString());
-//            }
-
             SwingUtilities.invokeLater(() ->
                     mainWindow.getModelBrowser().setModel(session.system().model())
             );
@@ -333,19 +297,14 @@ public class DTDLForm extends JDialog {
             }
 
             if (logWriter != null) {
-                logWriter.println(
-                        "[DTDLForm] created new MModel/MSystem: " + modelName
-                );
+                logWriter.println("[DTDLForm] created new MModel/MSystem: " + modelName);
             }
 
         } catch (Exception ex) {
             // never crash import because of bootstrap
             ex.printStackTrace(logWriter);
             if (logWriter != null) {
-                logWriter.println(
-                        "[DTDLForm] Warning: failed to bootstrap system/model: "
-                                + ex.getMessage()
-                );
+                logWriter.println("[DTDLForm] Warning: failed to bootstrap system/model: " + ex.getMessage());
             }
         }
     }

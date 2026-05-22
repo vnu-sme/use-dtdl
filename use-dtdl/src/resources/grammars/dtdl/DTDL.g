@@ -46,10 +46,6 @@ model returns [ASTInterface n]
       EOF
     ;
 
-/* =======================
-   INTERFACE BODY
-======================= */
-
 interfaceFields[ASTInterface iface]
     :
       interfaceField[iface] (COMMA interfaceField[iface])*
@@ -109,10 +105,6 @@ interfaceField[ASTInterface iface]
         }
       }
     ;
-
-/* =======================
-   VALUES
-======================= */
 
 value returns [ASTSchema schema, String text, Object obj]
     : s=STRING
@@ -209,12 +201,13 @@ jsonObjectValue returns [ASTSchema schema, Object obj]
 
             if (primaryType != null) {
                 // Schema types we care about now
-                if ("Enum".equals(primaryType) || "Object".equals(primaryType) || "Map".equals(primaryType)) {
+                if ("Enum".equals(primaryType) || "Object".equals(primaryType) || "Map".equals(primaryType) || "Array".equals(primaryType)) {
                     ASTSchema s;
                     switch (primaryType) {
                         case "Enum": s = new ASTEnum(); break;
                         case "Object": s = new ASTObject(); break;
                         case "Map": s = new ASTMap(); break;
+                        case "Array": s = new ASTArray(); break;
                         default: s = null; break;
                     }
                     if (s != null) {
@@ -273,10 +266,6 @@ jsonObjectValue returns [ASTSchema schema, Object obj]
         }
       }
     ;
-
-/* =======================
-   LEXER
-======================= */
 
 LBRACE  : '{' ;
 RBRACE  : '}' ;

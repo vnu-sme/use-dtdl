@@ -96,23 +96,6 @@ public final class DTDLContext {
         return registry.hasModelSchema(schemaId);
     }
 
-    /**
-     * Register a fully built DTDLModel so that subsequent validation/parses
-     * can consult its interfaces and schemas.
-     *
-     * @param model the converted model
-     * @param overwrite if true, overwrite existing interface registrations on conflict
-     * @return true if registration succeeded (or overwritten), false if conflict and not overwritten
-     */
-    public boolean registerModel(DTDLModel model, boolean overwrite) {
-        DTDLModelRegistry.RegistrationResult r = registry.registerModel(model, overwrite);
-        if (!r.success) {
-            // report conflicts into errors for UI
-            for (String c : r.conflicts) report("Interface '" + c + "' already registered in another model", c);
-        }
-        return r.success;
-    }
-
     public boolean unregisterModel(DTDLModel model) {
         return registry.unregisterModel(model);
     }

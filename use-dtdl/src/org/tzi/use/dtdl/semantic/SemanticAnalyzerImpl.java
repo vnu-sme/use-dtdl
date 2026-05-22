@@ -10,6 +10,7 @@ import org.tzi.use.dtdl.ast.schema.ASTSchema;
 import org.tzi.use.dtdl.ast.Converter;
 import org.tzi.use.dtdl.DTDLModel.DTDLModel;
 
+import java.sql.SQLOutput;
 import java.util.*;
 
 public class SemanticAnalyzerImpl implements SemanticAnalyzer {
@@ -115,12 +116,6 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
 
         // Phase 3: Detect and merge bidirectional relationships
         validateBiDirectionalRelationship();
-        for (ASTInterface iface : astInterfaces) {
-            for (ASTBidirectionalRelationship r : iface.getBidirectionalRelationships()) {
-                r.prints();
-            }
-        }
-
 
         // Phase 4: convert AST -> DTDLModel
         try {

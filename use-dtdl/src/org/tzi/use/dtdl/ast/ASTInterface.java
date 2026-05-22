@@ -138,21 +138,6 @@ public class ASTInterface extends ASTNode {
                 ASTSchema as = null;
                 if (s instanceof ASTSchema) {
                     as = (ASTSchema) s;
-                } else if (s instanceof Map<?, ?> m) {
-                    // Build an ASTSchema skeleton from raw map to store in index (deferred resolution)
-                    Object t = m.get("@type");
-                    if (t instanceof String) {
-                        switch ((String) t) {
-                            case "Enum" -> as = new ASTEnum();
-                            case "Object" -> as = new ASTObject();
-                            case "Map" -> as = new ASTMap();
-                            default -> as = null;
-                        }
-                        if (as != null) {
-                            // copy raw props (resolver will interpret them later)
-                            as.props.putAll((Map<? extends String, ?>) m);
-                        }
-                    }
                 }
 
                 if (as != null) {
@@ -294,11 +279,13 @@ public class ASTInterface extends ASTNode {
         c.name = (String) c.props.get("name");
         resolveGeneralInfo(c);
 
+        // populate props for request
         ASTContent req = ASTContent.fromRaw(c.props.get("request"));
         if (req != null) {
             c.request = resolveCommandPayload(req);
         }
 
+        // populate props for response
         ASTContent res = ASTContent.fromRaw(c.props.get("response"));
         if (res != null) {
             c.response = resolveCommandPayload(res);
@@ -312,14 +299,7 @@ public class ASTInterface extends ASTNode {
         if (raw.props != null) p.props.putAll(raw.props);
 
         resolveGeneralInfo(p);
-
         p.name = raw.name;
-        p.id = raw.id;
-        p.description = raw.description;
-        p.displayName = raw.displayName;
-        p.type = raw.type;
-        p.comment = raw.comment;
-
         p.schema = resolveSchemaFromProps(raw.props.get("schema"));
 
         Object nullable = raw.props.get("nullable");
@@ -357,13 +337,6 @@ public class ASTInterface extends ASTNode {
                 if (o instanceof ASTProperty ap) {
                     resolveProperty(ap);
                     r.properties.add(ap);
-                } else if (o instanceof java.util.Map<?,?> m) {
-                    ASTProperty ap2 = new ASTProperty();
-                    Object nm = m.get("name");
-                    if (nm instanceof String) ap2.name = (String) nm;
-                    ap2.props.putAll((Map<? extends String, ?>) m);
-                    resolveProperty(ap2);
-                    r.properties.add(ap2);
                 }
             }
         }
@@ -374,14 +347,6 @@ public class ASTInterface extends ASTNode {
         resolveGeneralInfo(c);
         Object raw = c.props.get("schema");
         if (raw instanceof String) c.schemaInterface = (String) raw;
-        else if (raw instanceof ASTSchema) {
-            // components typically reference other interfaces by DTMI string; handle defensively
-            c.schemaInterface = raw.toString();
-        } else if (raw instanceof java.util.Map<?,?> m) {
-            Object dtmi = m.get("dtmi");
-            if (dtmi instanceof String) c.schemaInterface = (String) dtmi;
-            else if (m.get("@id") instanceof String) c.schemaInterface = (String) m.get("@id");
-        }
     }
 
     ASTSchema resolveSchema(ASTSchema s) {
@@ -501,24 +466,6 @@ public class ASTInterface extends ASTNode {
 
         if (rawSchema instanceof ASTSchema as) {
             return resolveSchema(as);
-        }
-
-        if (rawSchema instanceof java.util.Map) {
-            Map<?,?> m = (Map<?,?>) rawSchema;
-            Object t = m.get("@type");
-            if (t instanceof String) {
-                ASTSchema as2 = switch ((String) t) {
-                    case "Enum" -> new ASTEnum();
-                    case "Object" -> new ASTObject();
-                    case "Map" -> new ASTMap();
-                    case "Array" -> new ASTArray();
-                    default -> null;
-                };
-                if (as2 != null) {
-                    as2.props.putAll((Map<? extends String, ?>) m);
-                    return resolveSchema(as2);
-                }
-            }
         }
 
         return null;

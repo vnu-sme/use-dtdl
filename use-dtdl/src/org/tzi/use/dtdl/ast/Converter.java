@@ -10,6 +10,13 @@ import org.tzi.use.dtdl.DTDLModel.Property.Property;
 import org.tzi.use.dtdl.DTDLModel.Command.Command;
 import org.tzi.use.dtdl.DTDLModel.Command.CommandPayload;
 import org.tzi.use.dtdl.DTDLModel.Relationship.BidirectionalRelationship;
+import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
+import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumLiteral;
+import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumValue;
+import org.tzi.use.dtdl.DTDLModel.Schema.Map.MapKey;
+import org.tzi.use.dtdl.DTDLModel.Schema.Map.MapValue;
+import org.tzi.use.dtdl.DTDLModel.Schema.Object.Field;
+import org.tzi.use.dtdl.DTDLModel.Schema.PrimitiveType;
 import org.tzi.use.dtdl.DTDLModel.Schema.Schema;
 import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
 import org.tzi.use.dtdl.DTDLModel.Component.Component;
@@ -35,22 +42,13 @@ public final class Converter {
 
         // Phase 1: create Interface shells
         for (ASTInterface a : astIfaces) {
-//            Object idObj = a.props.get("@id");
-//            if (!(idObj instanceof String id)) continue;
-
             Interface di = new Interface(a.id);
-
-//            Object ctxObj = a.props.get("@context");
-//            if (ctxObj instanceof String) di.setContext((String) ctxObj);
 
             di.setContext(a.context);
 
             di.setDescription(a.description);
             di.setDisplayName(a.displayName);
             di.setDescription(a.description);
-
-//            Object comment = a.props.get("comment");
-//            if (comment instanceof String) di.setComment((String) comment);
 
             model.addInterface(di);
             ifaceIndex.put(a.id, di);
@@ -282,7 +280,7 @@ public final class Converter {
         // primitive
         if (s instanceof ASTPrimitiveSchema) {
             String lower = getLower((ASTPrimitiveSchema) s);
-            return new org.tzi.use.dtdl.DTDLModel.Schema.PrimitiveType(lower);
+            return new PrimitiveType(lower);
         }
 
         // enum
@@ -290,22 +288,21 @@ public final class Converter {
             org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum out = new org.tzi.use.dtdl.DTDLModel.Schema.Enum.Enum();
 
             if (e.valueSchema != null) {
-                org.tzi.use.dtdl.DTDLModel.Schema.PrimitiveType vt = (org.tzi.use.dtdl.DTDLModel.Schema.PrimitiveType) convertSchema(e.valueSchema);
+                PrimitiveType vt = (PrimitiveType) convertSchema(e.valueSchema);
                 out.setValueSchema(vt);
             }
 
             if (e.enumValues != null) {
                 for (ASTEnumValue v : e.enumValues) {
                     if (v == null) continue;
-                    org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumValue ev =
-                            new org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumValue();
+                    EnumValue ev = new EnumValue();
                     ev.setName(v.name);
                     if (v.value != null) {
                         Object raw = v.value.raw();
                         if (raw instanceof Integer) {
-                            ev.setValue(new org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumLiteral((Integer) raw));
+                            ev.setValue(new EnumLiteral((Integer) raw));
                         } else if (raw instanceof String) {
-                            ev.setValue(new org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumLiteral((String) raw));
+                            ev.setValue(new EnumLiteral((String) raw));
                         }
                     }
                     out.addEnumValue(ev);
@@ -323,8 +320,7 @@ public final class Converter {
                 for (ASTField f : o.fields) {
                     if (f == null) continue;
                     Schema fieldSchema = convertSchema(f.schema);
-                    org.tzi.use.dtdl.DTDLModel.Schema.Object.Field mf =
-                            new org.tzi.use.dtdl.DTDLModel.Schema.Object.Field(f.name, fieldSchema);
+                    Field mf = new Field(f.name, fieldSchema);
                     out.addField(mf);
                 }
             }
@@ -337,14 +333,12 @@ public final class Converter {
                     new org.tzi.use.dtdl.DTDLModel.Schema.Map.Map();
             if (m.mapKey != null) {
                 Schema kSchema = convertSchema(m.mapKey.schema);
-                org.tzi.use.dtdl.DTDLModel.Schema.Map.MapKey mk =
-                        new org.tzi.use.dtdl.DTDLModel.Schema.Map.MapKey(m.mapKey.name, kSchema);
+                MapKey mk = new MapKey(m.mapKey.name, kSchema);
                 out.setMapKey(mk);
             }
             if (m.mapValue != null) {
                 Schema vSchema = convertSchema(m.mapValue.schema);
-                org.tzi.use.dtdl.DTDLModel.Schema.Map.MapValue mv =
-                        new org.tzi.use.dtdl.DTDLModel.Schema.Map.MapValue(vSchema);
+                MapValue mv = new MapValue(vSchema);
                 out.setMapValue(mv);
             }
             return out;
@@ -352,8 +346,7 @@ public final class Converter {
 
         // array
         if (s instanceof ASTArray a) {
-            org.tzi.use.dtdl.DTDLModel.Schema.Array.Array out =
-                    new org.tzi.use.dtdl.DTDLModel.Schema.Array.Array();
+            Array out = new Array();
             if (a.elementSchema != null) out.setElementSchema(convertSchema(a.elementSchema));
             return out;
         }
