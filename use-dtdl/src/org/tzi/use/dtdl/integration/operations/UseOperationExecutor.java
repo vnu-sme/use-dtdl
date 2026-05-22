@@ -39,14 +39,11 @@ public final class UseOperationExecutor implements OperationExecutor {
             return new OperationResult(false, objectName, null, operationName, null, "Object not found", Instant.now(), null);
         }
 
-        logObjectSnapshot("before-exec", target, system);
-
         MClass cls = target.cls();
         String className = cls == null ? null : cls.name();
 
         OperationCatalog.OperationDescriptor descriptor = catalog.get(className, operationName).orElse(null);
         if (descriptor == null) {
-            System.out.println("[OP-EXEC] descriptor not found for " + className + "::" + operationName);
             return new OperationResult(false, objectName, className, operationName, null,
                     "Operation not registered in catalog for " + className + "::" + operationName,
                     Instant.now(), null);
@@ -59,92 +56,39 @@ public final class UseOperationExecutor implements OperationExecutor {
                     Instant.now(), null);
         }
 
-        List<String> candidates = List.of(
-                objectName + "." + operationName + "()",
-                operationName + "(" + objectName + ")",
-                operationName + " " + objectName
+        String command = objectName + "." + operationName + "()";
+
+        MStatement statement = ShellCommandCompiler.compileShellCommand(
+                system.model(),
+                system.state(),
+                system.getVariableEnvironment(),
+                command,
+                "<operation-exec>",
+                new PrintWriter(System.err),
+                false
         );
 
-        for (String command : candidates) {
-            System.out.println("[OP-EXEC] trying command: " + command);
-
-            MStatement statement = ShellCommandCompiler.compileShellCommand(
-                    system.model(),
-                    system.state(),
-                    system.getVariableEnvironment(),
-                    command,
-                    "<operation-exec>",
-                    new PrintWriter(System.err),
-                    false
-            );
-
-            if (statement == null) {
-                System.out.println("[OP-EXEC] compile failed: " + command);
-                continue;
-            }
-
-            System.out.println("[OP-EXEC] compiled statement=" + statement.getClass().getSimpleName());
-
-            try {
-                if ((statement instanceof MEnterOperationStatement) || (statement instanceof MExitOperationStatement)) {
-                    system.execute(statement, false, true, true);
-                } else {
-                    system.execute(statement);
-                }
-
-                logObjectSnapshot("after-system-execute", target, system);
-
-                session.evaluatedStatement(statement);
-
-                logObjectSnapshot("after-session-evaluatedStatement", target, system);
-                System.out.println("[OP-EXEC] success with command: " + command);
-
-                return new OperationResult(true, objectName, className, operationName, command, "Executed", Instant.now(), statement);
-            } catch (Exception e) {
-                System.out.println("[OP-EXEC] execution failed: " + e.getMessage());
-                Log.error(e.getMessage());
-                logObjectSnapshot("after-failed-exec", target, system);
-                return new OperationResult(false, objectName, className, operationName, command, e.getMessage(), Instant.now(), statement);
-            }
+        if (statement == null) {
+            return new OperationResult(false, objectName, className, operationName, null,
+                    "Could not compile executable USE command", Instant.now(), null);
         }
-        System.out.println("[OP-EXEC] no valid command found");
-
-        logObjectSnapshot("after-no-valid-command", target, system);
-
-        return new OperationResult(false, objectName, className, operationName, null,
-                "Could not compile an executable USE command for this operation",
-                Instant.now(), null);
-    }
-
-    // DEBUG ONLY: DELETED WHEN COMMIT
-    private void logObjectSnapshot(String stage, MObject target, MSystem system) {
-        if (target == null) {
-            System.out.println("[OP-EXEC] " + stage + " target=null");
-            return;
-        }
-        if (system == null) {
-            System.out.println("[OP-EXEC] " + stage + " system=null");
-            return;
-        }
-
-        System.out.println("[OP-EXEC] " + stage + " object=" + target.name() + " class=" + (target.cls() == null ? "null" : target.cls().name()));
 
         try {
-            if (target.cls() == null) {
-                return;
+            if ((statement instanceof MEnterOperationStatement) || (statement instanceof MExitOperationStatement)) {
+                system.execute(statement, false, true, true);
+            } else {
+                system.execute(statement);
             }
 
-            var objState = target.state(system.state());
-            for (MAttribute attr : target.cls().allAttributes()) {
-                Object value = null;
-                try {
-                    value = objState.attributeValue(attr);
-                } catch (Throwable ignored) {
-                }
-                System.out.println("[OP-EXEC]   " + attr.name() + " = " + value);
-            }
-        } catch (Throwable t) {
-            System.out.println("[OP-EXEC]   snapshot failed: " + t.getMessage());
+            session.evaluatedStatement(statement);
+
+            System.out.println("[OP-EXEC] success with command: " + command);
+
+            return new OperationResult(true, objectName, className, operationName, command, "Executed", Instant.now(), statement);
+        } catch (Exception e) {
+            System.out.println("[OP-EXEC] execution failed: " + e.getMessage());
+            Log.error(e.getMessage());
+            return new OperationResult(false, objectName, className, operationName, command, e.getMessage(), Instant.now(), statement);
         }
     }
 }

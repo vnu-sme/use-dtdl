@@ -21,7 +21,6 @@ public final class StartTelemetryRuntimeAction implements IPluginActionDelegate 
     public void performAction(IPluginAction action) {
         MainWindow mainWindow = action.getParent();
         Session s = action.getSession();
-        DTDLPluginState.bindSession(s);
         try {
             // ensure engine running & available
             TelemetryEngine eng = DTDLPluginState.startTelemetryRuntime(s);

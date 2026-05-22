@@ -14,7 +14,6 @@ public final class OperationExecutionRule implements Serializable {
     public String constraintName;
     public boolean triggerWhenConstraintTrue;
     public boolean armed = true;
-    public boolean active = true;
     public boolean lastConstraintValue;
     public boolean hasLastConstraintValue;
     public int fireCount;
@@ -44,6 +43,6 @@ public final class OperationExecutionRule implements Serializable {
     @Override
     public String toString() {
         return id + " | " + objectName + " | " + operationName + " | " + constraintName + " | " +
-                (triggerWhenConstraintTrue ? "true" : "false") + " | " + (active ? "active" : "inactive");
+                (triggerWhenConstraintTrue ? "true" : "false");
     }
 }

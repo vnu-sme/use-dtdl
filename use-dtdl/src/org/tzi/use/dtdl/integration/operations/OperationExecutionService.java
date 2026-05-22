@@ -11,35 +11,25 @@ import org.tzi.use.uml.sys.MObject;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.time.Instant;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class OperationExecutionService {
     private final Session session;
-    private final OperationExecutionRegistry registry;
+    private final Map<String, OperationExecutionRule> rules = new LinkedHashMap<>();
     private final OperationExecutor executor;
     private final AtomicBoolean dispatching = new AtomicBoolean(false);
     private final AtomicBoolean evaluating = new AtomicBoolean(false);
     private final ArrayDeque<OperationResult> history = new ArrayDeque<>();
     private static final int MAX_HISTORY = 300;
 
-    public OperationExecutionService(Session session,
-                                     OperationExecutionRegistry registry,
-                                     OperationExecutor executor) {
+    public OperationExecutionService(Session session, OperationExecutor executor) {
         this.session = Objects.requireNonNull(session, "session");
-        this.registry = Objects.requireNonNull(registry, "registry");
         this.executor = Objects.requireNonNull(executor, "executor");
     }
 
-    public OperationExecutionRegistry registry() {
-        return registry;
-    }
-
     public List<OperationExecutionRule> rules() {
-        return new ArrayList<>(registry.all().values());
+        return new ArrayList<>(rules.values());
     }
 
     public List<OperationResult> history() {
@@ -50,12 +40,11 @@ public final class OperationExecutionService {
 
     public void registerRule(OperationExecutionRule rule) {
         System.out.println("[OP-RULE] register " + rule);
-        registry.register(rule);
+        rules.put(rule.id, rule);
     }
 
     public void removeRule(String ruleId) {
-        System.out.println("[OP-RULE] remove " + ruleId);
-        registry.remove(ruleId);
+        rules.remove(ruleId);
     }
 
     public OperationResult executeManual(String objectName, String operationName) {
@@ -83,7 +72,7 @@ public final class OperationExecutionService {
 
         try {
             for (OperationExecutionRule rule : rules()) {
-                System.out.println("[OP-RULE] evaluating " + rule.id);
+//                System.out.println("[OP-RULE] evaluating " + rule.id);
                 evaluateRule(rule);
             }
         } finally {
@@ -96,50 +85,25 @@ public final class OperationExecutionService {
             System.out.println("[OP-RULE] evaluateRule skipped: rule=null");
             return;
         }
-        if (!rule.active) {
-            System.out.println("[OP-RULE] evaluateRule skipped: inactive " + rule.id);
-            return;
-        }
 
         rule.lastCheckedAt = Instant.now().toString();
 
-        System.out.println("[OP-RULE] evaluate rule=" + rule.id
-                + " object=" + rule.objectName
-                + " class=" + rule.className
-                + " op=" + rule.operationName
-                + " constraint=" + rule.constraintName
-                + " triggerWhenTrue=" + rule.triggerWhenConstraintTrue
-                + " armed=" + rule.armed);
+        System.out.println("[OP-RULE] evaluate rule=" + rule.id + " object=" + rule.objectName + " class=" + rule.className + " op=" + rule.operationName
+                + " constraint=" + rule.constraintName + " triggerWhenTrue=" + rule.triggerWhenConstraintTrue + " armed=" + rule.armed);
 
         if (session.system() == null || rule.objectName == null || rule.operationName == null || rule.constraintName == null) {
             rule.lastStatus = "INVALID";
             rule.lastMessage = "Missing rule data";
-            System.out.println("[OP-RULE] invalid rule data for " + rule.id);
             return;
         }
 
         MObject target = session.system().state().objectByName(rule.objectName);
         if (target == null) {
-            rule.lastStatus = "OBJECT_MISSING";
-            rule.lastMessage = "Object not found: " + rule.objectName;
-            System.out.println("[OP-RULE] target missing for " + rule.id + ": " + rule.objectName);
-            return;
-        }
-
-        logTargetSnapshot("target", target);
-
-        if (rule.className != null && target.cls() != null && !rule.className.equals(target.cls().name())) {
-            rule.lastStatus = "CLASS_MISMATCH";
-            rule.lastMessage = "Object class mismatch: expected " + rule.className + ", got " + target.cls().name();
-            System.out.println("[OP-RULE] class mismatch: expected=" + rule.className + " actual=" + target.cls().name());
             return;
         }
 
         MClassInvariant invariant = findInvariant(rule.constraintName);
         if (invariant == null || invariant.flaggedExpression() == null) {
-            rule.lastStatus = "CONSTRAINT_MISSING";
-            rule.lastMessage = "Constraint not found: " + rule.constraintName;
-            System.out.println("[OP-RULE] invariant missing: " + rule.constraintName);
             return;
         }
 
@@ -148,11 +112,8 @@ public final class OperationExecutionService {
             Evaluator evaluator = new Evaluator();
             Value v = evaluator.eval(invariant.flaggedExpression(), session.system().state());
             satisfied = v != null && v.isBoolean() && ((BooleanValue) v).value();
-            System.out.println("[OP-RULE] constraint result=" + satisfied + " raw=" + v);
         } catch (Throwable t) {
-            rule.lastStatus = "CONSTRAINT_ERROR";
-            rule.lastMessage = t.getMessage();
-            System.out.println("[OP-RULE] constraint error: " + t.getMessage());
+            System.err.println("[OP-RULE] evaluate rule failed: " + t.getMessage());
             return;
         }
 
@@ -160,11 +121,6 @@ public final class OperationExecutionService {
         rule.hasLastConstraintValue = true;
 
         boolean shouldFire = satisfied == rule.triggerWhenConstraintTrue;
-        System.out.println("[OP-RULE] shouldFire=" + shouldFire
-                + " armed=" + rule.armed
-                + " satisfied=" + satisfied
-                + " lastConstraintValue=" + rule.lastConstraintValue
-                + " fireCount=" + rule.fireCount);
 
         if (!shouldFire) {
             rule.armed = true;
@@ -174,6 +130,7 @@ public final class OperationExecutionService {
             return;
         }
 
+        // match condition
         if (!rule.armed) {
             rule.lastStatus = "DISARMED";
             rule.lastMessage = "Already fired for current condition";
@@ -181,6 +138,7 @@ public final class OperationExecutionService {
             return;
         }
 
+        // match condition and allow to fire
         if (dispatching.get()) {
             rule.lastStatus = "BUSY";
             rule.lastMessage = "Executor busy";
@@ -190,8 +148,6 @@ public final class OperationExecutionService {
 
         dispatching.set(true);
         try {
-            System.out.println("[OP-RULE] firing " + rule.objectName + "." + rule.operationName);
-
             OperationResult result = executor.execute(rule.objectName, rule.operationName);
             pushHistory(result);
             rule.lastExecutedAt = Instant.now().toString();
@@ -199,9 +155,6 @@ public final class OperationExecutionService {
             rule.lastStatus = result.success ? "FIRED" : "FAILED";
             rule.lastMessage = result.message;
             rule.armed = false;
-
-            System.out.println("[OP-RULE] result " + result);
-            System.out.println("[OP-RULE] after fire armed=" + rule.armed + " fireCount=" + rule.fireCount + " lastStatus=" + rule.lastStatus);
         } finally {
             dispatching.set(false);
         }
@@ -237,29 +190,5 @@ public final class OperationExecutionService {
                 history.removeFirst();
             }
         }
-    }
-
-    public String buildStatusText() {
-        StringWriter sw = new StringWriter();
-        PrintWriter pw = new PrintWriter(sw, true);
-        for (OperationExecutionRule r : rules()) {
-            pw.println(r);
-            pw.println("  lastStatus=" + r.lastStatus);
-            pw.println("  lastMessage=" + r.lastMessage);
-            pw.println("  fireCount=" + r.fireCount);
-            pw.println("  lastCheckedAt=" + r.lastCheckedAt);
-            pw.println("  lastExecutedAt=" + r.lastExecutedAt);
-        }
-        return sw.toString();
-    }
-
-    // DEBUG ONLY: DELETED WHEN COMMIT
-    private void logTargetSnapshot(String stage, MObject target) {
-        if (target == null) {
-            System.out.println("[OP-RULE] " + stage + " target=null");
-            return;
-        }
-
-        System.out.println("[OP-RULE] " + stage + " object=" + target.name() + " class=" + (target.cls() == null ? "null" : target.cls().name()));
     }
 }
