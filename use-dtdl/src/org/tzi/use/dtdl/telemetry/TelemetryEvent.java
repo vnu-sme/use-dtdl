@@ -6,7 +6,7 @@ import java.util.Map;
 
 
 public final class TelemetryEvent {
-    public final String dtmi; // optional, usually null
+    public String dtmi; // optional, usually null
     public final String deviceId; // optional
     public final String objectName; // optional (explicit target USE object)
     public final Object rawValue; // raw payload value (String, Number, Map, List...)
@@ -31,5 +31,9 @@ public final class TelemetryEvent {
                 "dtmi='" + dtmi + '\'' + ", deviceId='" + deviceId + '\'' + ", objectName='" + objectName + '\'' +
                 ", rawValue=" + rawValue + ", timestamp=" + timestamp +
                 ", source='" + source + '\'' + '}';
+    }
+
+    public void setDTMI(String dtmi) {
+        this.dtmi = dtmi;
     }
 }

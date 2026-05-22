@@ -46,20 +46,9 @@ public final class TelemetryApplier {
         if (matchedObject == null) return false;
 
         MObject target = session.system().state().objectByName(matchedObject);
-        logTargetSnapshot("before-apply", target, session);
         if (target == null) {
             System.err.println("[TelemetryApplier] target object not found: " + matchedObject);
             return false;
-        }
-
-        String className = null;
-        if (ifaceId != null && registry != null) {
-            var opt = registry.getClassNameForDtmi(ifaceId);
-            if (opt.isPresent()) {
-                className = opt.get();
-            } else {
-                throw new IllegalStateException("No USE class mapping for DTMI: " + ifaceId);
-            }
         }
 
         try {
@@ -84,8 +73,7 @@ public final class TelemetryApplier {
                     var useVal = useService.buildUseValue(attrType, rawVal);
 
                     try {
-                        sysApi.setAttributeValueEx(session.system().state().objectByName(target.name()), mAttr, useVal);
-                        logTargetSnapshot("after-attribute-write", target, session);
+                        sysApi.setAttributeValueEx(target, mAttr, useVal);
                     } catch (Exception ex) {
                         System.err.println("[TelemetryApplier] failed setting attribute '" + mAttr.name() + "' : " + ex.getMessage());
                         ex.printStackTrace(System.err);
@@ -98,8 +86,7 @@ public final class TelemetryApplier {
                     if (mAttr != null) {
                         var useVal = useService.buildUseValue(mAttr.type(), normalized);
                         try {
-                            sysApi.setAttributeValueEx(session.system().state().objectByName(target.name()), mAttr, useVal);
-                            logTargetSnapshot("after-attribute-write", target, session);
+                            sysApi.setAttributeValueEx(target, mAttr, useVal);
                         } catch (Exception ex) {
                             System.err.println("[TelemetryApplier] failed setting attribute '" + mAttr.name() + "' : " + ex.getMessage());
                             ex.printStackTrace(System.err);
@@ -118,12 +105,10 @@ public final class TelemetryApplier {
 
             try {
                 session.system().state().updateDerivedValues(true);
-                logTargetSnapshot("after-derived-update", target, session);
             } catch (Throwable ignored) {}
 
             try {
                 DTDLPluginState.operationService(session).evaluateAll();
-                logTargetSnapshot("after-operation-evaluate", target, session);
             } catch (Throwable ignored) {}
 
             if (!shouldCheckConstraints) {
@@ -148,36 +133,21 @@ public final class TelemetryApplier {
                             fact.addDiag("Multiplicity violation evaluating invariant " + inv.qualifiedName());
                         } else if (!v.isBoolean() || !((BooleanValue) v).value()) {
                             classViolationDetected = true;
-                            classDiagPw.println("Invariant violated: " + inv.qualifiedName());
-                            classDiagPw.println("  expression: " + inv.flaggedExpression());
-                            classDiagPw.println("  result: " + v);
-                            fact.addDiag("Invariant violated: " + inv.qualifiedName());
-                            fact.addDiag("  result: " + v);
+                            classDiagPw.println("Invariant violated: " + inv.qualifiedName() + ", expression: " + inv.flaggedExpression() + ", result: " + v );
+                            fact.addDiag("Invariant violated: " + inv.qualifiedName() + ", result: " + v);
                         } else {
                             // satisfied; optionally log at debug level
                         }
                     } catch (MultiplicityViolationException mve) {
                         classViolationDetected = true;
-                        classDiagPw.println("Multiplicity violation evaluating invariant " + inv.qualifiedName() + ": " + mve.getMessage());
-                        StringWriter sw = new StringWriter();
-                        mve.printStackTrace(new PrintWriter(sw, true));
-                        classDiagPw.println(sw.toString());
-                        fact.addDiag("Multiplicity violation evaluating invariant " + inv.qualifiedName() + ": " + mve.getMessage());
+                        logInvariantError(classDiagPw, fact, "Multiplicity violation evaluating invariant " + inv.qualifiedName() + ": " + mve.getMessage(), mve);
                     } catch (Throwable t) {
                         classViolationDetected = true;
-                        classDiagPw.println("Error evaluating invariant " + inv.qualifiedName() + ": " + t.getMessage());
-                        StringWriter sw = new StringWriter();
-                        t.printStackTrace(new PrintWriter(sw, true));
-                        classDiagPw.println(sw.toString());
-                        fact.addDiag("Error evaluating invariant " + inv.qualifiedName() + ": " + t.getMessage());
+                        logInvariantError(classDiagPw, fact, "Error evaluating invariant " + inv.qualifiedName() + ": " + t.getMessage(), t);
                     }
                 }
             } catch (Throwable t) {
-                classDiagPw.println("Failed to evaluate class invariants: " + t.getMessage());
-                StringWriter sw = new StringWriter();
-                t.printStackTrace(new PrintWriter(sw, true));
-                classDiagPw.println(sw.toString());
-                fact.addDiag("Failed to evaluate class invariants: " + t.getMessage());
+                logInvariantError(classDiagPw, fact, "Failed to evaluate class invariants: " + t.getMessage(), t);
                 classViolationDetected = true;
             }
 
@@ -206,16 +176,31 @@ public final class TelemetryApplier {
     private MAttribute resolveAttribute(MClass cls, String attrName) {
         if (cls == null || attrName == null) return null;
         MAttribute mAttr = cls.attribute(attrName, true);
-        if (mAttr != null) return mAttr;
-        if (attrName.startsWith(Utils.TELEMETRY_ATTR_PREFIX)) {
-            return cls.attribute(attrName, true);
+        if (mAttr != null) {
+            return mAttr;
         }
+
         String telCandidate = Utils.TELEMETRY_ATTR_PREFIX + Utils.sanitize(attrName);
         mAttr = cls.attribute(telCandidate, true);
+
         if (mAttr != null) return mAttr;
         String sanitized = Utils.sanitize(attrName);
         mAttr = cls.attribute(sanitized, true);
         return mAttr;
+    }
+
+    private void logInvariantError(PrintWriter pw, TelemetryFact fact, String message, Throwable t) {
+        pw.println(message);
+
+        if (t != null) {
+            StringWriter sw = new StringWriter();
+            t.printStackTrace(new PrintWriter(sw, true));
+            pw.println(sw);
+        }
+
+        if (fact != null) {
+            fact.addDiag(message);
+        }
     }
 
     public static void handleViolationAndStop(String adapterId, String details) {
@@ -253,27 +238,5 @@ public final class TelemetryApplier {
         }
 
         return sb.toString();
-    }
-
-    private void logTargetSnapshot(String stage, MObject target, Session session) {
-        if (target == null) {
-            return;
-        }
-        if (session == null || session.system() == null || target.cls() == null) {
-            return;
-        }
-
-        try {
-            var state = target.state(session.system().state());
-            for (MAttribute attr : target.cls().allAttributes()) {
-                Object value = null;
-                try {
-                    value = state.attributeValue(attr);
-                } catch (Throwable ignored) {
-                }
-            }
-        } catch (Throwable t) {
-            System.out.println("[TELEM]   snapshot failed: " + t.getMessage());
-        }
     }
 }

@@ -72,6 +72,7 @@ public class ApiRegistrationDialog extends JDialog {
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4,4,4,4);
         gbc.fill = GridBagConstraints.HORIZONTAL;
+
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
         form.add(new JLabel("URL"), gbc);
         gbc.gridx = 1; gbc.weightx = 1.0;
@@ -103,7 +104,8 @@ public class ApiRegistrationDialog extends JDialog {
         form.add(new JLabel("Device ID"), gbc);
         gbc.gridx = 1; form.add(deviceIdField, gbc);
 
-        gbc.gridx = 0; gbc.gridy++; form.add(new JLabel("Object Name (override)"), gbc);
+        gbc.gridx = 0; gbc.gridy++;
+        form.add(new JLabel("Object Name (override)"), gbc);
         gbc.gridx = 1; form.add(objectNameField, gbc);
 
         content.add(form, BorderLayout.NORTH);
@@ -208,6 +210,7 @@ public class ApiRegistrationDialog extends JDialog {
         objectFieldPathFields.clear();
 
         if (objectName == null || objectName.isBlank()) {
+            // still has selected combo and objectName
             telemetryPanel.revalidate();
             telemetryPanel.repaint();
             return;
@@ -312,8 +315,6 @@ public class ApiRegistrationDialog extends JDialog {
                 Schema elem = SchemaInputFactory.resolveNamedSchema(arrSch.getElementSchema(), iface);
 
                 if (elem instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object elemObj) {
-                    // treat as object-like: show fields (user should enter JSON path that extracts element field,
-                    // e.g. "items[0].temp" or whichever path syntax JacksonPath supports for their use case)
                     Map<String, JTextField> fieldMap = new LinkedHashMap<>();
                     // add an optional hint row explaining this is per-element field extraction
                     gbc.gridx = 0;

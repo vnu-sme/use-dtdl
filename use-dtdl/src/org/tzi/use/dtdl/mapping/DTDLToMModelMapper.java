@@ -690,10 +690,10 @@ public class DTDLToMModelMapper {
             if (api.getModel().getDataType(enumName) == null) {
                 List<String> lits = new ArrayList<>();
                 for (EnumValue v : e.getValues()) {
-                    if (v.getName() != null && !v.getName().isEmpty()) {
-                        lits.add(v.getName());
-                    } else if (v.getValue() != null) {
+                    if (v.getValue() != null) {
                         lits.add(String.valueOf(v.getValue().raw()));
+                    } else if (v.getName() != null && !v.getName().isEmpty()) {
+                        lits.add(v.getName());
                     }
                 }
                 EnumType et = api.createEnumeration(enumName, lits);

@@ -1,9 +1,12 @@
 package org.tzi.use.dtdl.telemetry;
 
+import org.tzi.use.dtdl.actions.DTDLPluginState;
 import org.tzi.use.dtdl.gui.telemetry.visualizer.TelemetryUiListener;
 import org.tzi.use.dtdl.gui.telemetry.visualizer.TelemetryUiRecord;
+import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.dtdl.util.telemetry.RobustWindowGate;
 import org.tzi.use.main.Session;
+import org.tzi.use.uml.mm.MClass;
 
 import java.io.Closeable;
 import java.util.*;
@@ -68,6 +71,10 @@ public final class TelemetryEngine implements AutoCloseable {
 
                 System.err.println("[TelemetryEngine] dispatching event to processor for binding: " + b);
                 try {
+                    // populate dtmi for event
+                    MClass classByObjectName = session.system().state().objectByName(ev.objectName).cls();
+                    ev.setDTMI(DTDLPluginState.registry().findDTMIByClass(classByObjectName.name()));
+
                     TelemetryFact fact = processor.process(ev, b);
                     System.err.println("[TelemetryEngine] fact=" + fact);
                     for (String d : fact.diagnostics) System.err.println(" diag: " + d);
@@ -93,20 +100,8 @@ public final class TelemetryEngine implements AutoCloseable {
                 return;
             }
 
-            // no binding matched -> Default single-binding processing
-            System.err.println("[TelemetryEngine] no matching bindings found for adapter=" + ev.source + ", using default processing");
-            try {
-                TelemetryFact fact = processor.process(ev);
-                System.err.println("[TelemetryEngine] fact=" + fact);
-                for (String d : fact.diagnostics) System.err.println(" diag: " + d);
-
-                applyWithRobustGate(ev, null, fact, warmup);
-            } catch (Throwable t) {
-                System.err.println("[TelemetryEngine] processing failed: " + t.getMessage());
-                t.printStackTrace(System.err);
-
-                publishUiRecord(buildUiRecord(ev, null, null, false, "ERROR", t.getMessage()));
-            }
+            // no binding matched
+            throw new IllegalStateException("No binding matched for adapter=" + ev.source + ", object=" + ev.objectName + ", dtmi=" + ev.dtmi);
         } catch (Throwable t) {
             System.err.println("[TelemetryEngine] consume error: " + t.getMessage());
             t.printStackTrace(System.err);

@@ -3,6 +3,7 @@ package org.tzi.use.dtdl.mapping;
 import org.tzi.use.api.UseModelApi;
 import org.tzi.use.dtdl.DTDLModel.Interface;
 import org.tzi.use.dtdl.DTDLModel.Relationship.Relationship;
+import org.tzi.use.dtdl.actions.DTDLPluginState;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
 import org.tzi.use.uml.mm.MAssociation;
 import org.tzi.use.uml.mm.MAssociationEnd;
@@ -94,49 +95,6 @@ public final class MapperHelper {
 
     public static String[] computeBidirectionalRoleNames(MClass srcCls, MClass tgtCls, String leftRole, String rightRole) {
         return new String[]{srcCls + "_" + leftRole, tgtCls + "_" + rightRole};
-    }
-
-    public static MClass resolveTargetClass(
-            Interface tgt,
-            Map<String, MClass> ifaceToClass,
-            DTDLModelRegistry registry,
-            UseModelApi api,
-            PrintWriter logWriter
-    ) {
-        if (tgt == null) return null;
-
-        MClass targetCls = ifaceToClass.get(tgt.getId());
-
-        if (targetCls == null && registry != null) {
-            Optional<String> mapped = registry.getClassNameForDtmi(tgt.getId());
-
-            if (mapped.isPresent()) {
-                targetCls = api.getModel().getClass(mapped.get());
-
-                if (targetCls != null) {
-                    ifaceToClass.put(tgt.getId(), targetCls);
-
-                    if (logWriter != null) {
-                        logWriter.println(
-                                "[DTDL->M] resolved relationship target to registry class: "
-                                        + targetCls.name()
-                                        + " for dtmi "
-                                        + tgt.getId()
-                        );
-                    }
-                }
-            }
-        }
-
-        if (targetCls == null && logWriter != null) {
-            logWriter.println(
-                    "[DTDL->M] could not resolve relationship target for dtmi "
-                            + tgt.getId()
-                            + " — skipping association"
-            );
-        }
-
-        return targetCls;
     }
 
     public static String buildAssociationName(

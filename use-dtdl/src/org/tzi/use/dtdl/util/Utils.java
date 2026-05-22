@@ -2,6 +2,8 @@ package org.tzi.use.dtdl.util;
 
 import org.tzi.use.dtdl.DTDLModel.Interface;
 
+import java.util.Objects;
+
 public final class Utils {
 
     public static final String TELEMETRY_ATTR_PREFIX = "__tel_";
@@ -64,5 +66,16 @@ public final class Utils {
         } catch (Exception e) {
             return def;
         }
+    }
+
+    public static boolean flexibleEquals(Object a, Object b) {
+        if (a instanceof Number na && b instanceof Number nb) {
+            return Double.compare(na.doubleValue(), nb.doubleValue()) == 0;
+        }
+
+        return Objects.equals(
+                String.valueOf(a),
+                String.valueOf(b)
+        );
     }
 }

@@ -192,8 +192,7 @@ public final class DTDLOCLIntegrator {
             MMPrintVisitor dtVisitor = new MMPrintVisitor(dtPw);
 
             var model = session.system().model();
-            org.tzi.use.uml.mm.MDataType[] dataTypes =
-                    model.dataTypes().toArray(new org.tzi.use.uml.mm.MDataType[0]);
+            org.tzi.use.uml.mm.MDataType[] dataTypes = model.dataTypes().toArray(new org.tzi.use.uml.mm.MDataType[0]);
             java.util.Arrays.sort(dataTypes, new UseFileOrderComparator());
 
             for (org.tzi.use.uml.mm.MDataType dt : dataTypes) {
@@ -238,7 +237,7 @@ public final class DTDLOCLIntegrator {
             return modelText;
         }
 
-        Map<String, String> blocks = parseClassBlocks(operationText, diagWriter);
+        Map<String, String> blocks = parseClassBlocks(operationText, diagWriter); // map class name => operation section
         String result = modelText;
 
         for (Map.Entry<String, String> en : blocks.entrySet()) {
@@ -273,6 +272,7 @@ public final class DTDLOCLIntegrator {
             String classBody = cm.group(2);
             String endLine = cm.group(3);
 
+            // find operations block
             Pattern opsPattern = Pattern.compile("(?m)^\\s*operations\\s*$");
             Matcher om = opsPattern.matcher(classBody);
 
@@ -283,19 +283,14 @@ public final class DTDLOCLIntegrator {
                 continue;
             }
 
+            // get everything above operations block
             String prefix = classBody.substring(0, om.start());
 
             if (!prefix.isEmpty() && !prefix.endsWith(System.lineSeparator())) {
                 prefix = prefix + System.lineSeparator();
             }
 
-            String replacement = header
-                    + prefix
-                    + "operations"
-                    + System.lineSeparator()
-                    + opSection
-                    + System.lineSeparator()
-                    + endLine;
+            String replacement = header + prefix + "operations" + System.lineSeparator() + opSection + System.lineSeparator() + endLine;
 
             result = result.substring(0, cm.start())
                     + replacement
@@ -315,16 +310,19 @@ public final class DTDLOCLIntegrator {
         String currentClass = null;
         StringBuilder currentBody = null;
 
+        // class Person, class Person < Object, class    Person ==> group(1) = Person
         Pattern headerPattern = Pattern.compile("^\\s*class\\s+([A-Za-z_][A-Za-z0-9_]*)\\b.*$");
 
-        for (String line : operationText.split("\\R", -1)) {
+        for (String line : operationText.split("\\R", -1)) { // -1 keeps empty line
             Matcher hm = headerPattern.matcher(line);
 
             if (hm.matches()) {
+                // put previous class and body to blocks
                 if (currentClass != null) {
                     blocks.put(currentClass, currentBody.toString());
                 }
 
+                // start of new class
                 currentClass = hm.group(1);
                 currentBody = new StringBuilder();
 
@@ -334,11 +332,13 @@ public final class DTDLOCLIntegrator {
                 continue;
             }
 
+            // If not header, append it to build operation body of current class
             if (currentClass != null) {
                 currentBody.append(line).append(System.lineSeparator());
             }
         }
 
+        // For last block
         if (currentClass != null) {
             blocks.put(currentClass, currentBody.toString());
         }
@@ -368,38 +368,6 @@ public final class DTDLOCLIntegrator {
         }
 
         if (end >= start && lines[end].trim().equalsIgnoreCase("end")) {
-            end--;
-        }
-
-        if (start > end) {
-            return "";
-        }
-
-        StringBuilder sb = new StringBuilder();
-        for (int i = start; i <= end; i++) {
-            if (i > start) {
-                sb.append(System.lineSeparator());
-            }
-            sb.append(lines[i]);
-        }
-
-        return trimBlankEdges(sb.toString());
-    }
-
-    private static String trimBlankEdges(String text) {
-        if (text == null || text.isBlank()) {
-            return "";
-        }
-
-        String[] lines = text.split("\\R", -1);
-        int start = 0;
-        int end = lines.length - 1;
-
-        while (start <= end && lines[start].trim().isEmpty()) {
-            start++;
-        }
-
-        while (end >= start && lines[end].trim().isEmpty()) {
             end--;
         }
 
