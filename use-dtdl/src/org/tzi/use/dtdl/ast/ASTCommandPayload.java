@@ -28,30 +28,5 @@ public class ASTCommandPayload extends ASTContent {
         if (this.name != null && this.name.isBlank()) {
             ctx.report("Command payload has empty name", this.id);
         }
-
-        // resolve schema similar to properties
-        Object raw = this.props.get("schema");
-        if (raw instanceof String ref) {
-            ASTSchema resolved = ctx.resolveSchemaRefGlobal(ref);
-            if (resolved == null) {
-                if (!ctx.hasModelSchema(ref)) {
-                    ctx.report("Command payload '" + this.name + "' unresolved schema: " + ref, this.id);
-                }
-            } else {
-                this.schema = resolved;
-            }
-        } else if (raw instanceof ASTSchema) {
-            this.schema = (ASTSchema) raw;
-        } else if (this.schema == null) {
-            // payload without explicit schema is allowed (maybe free-form) — warn
-            ctx.report("Command payload '" + this.name + "' missing schema", this.id);
-        }
-
-        Object n = this.props.get("nullable");
-        if (n != null && !(n instanceof Boolean)) {
-            ctx.report("Command payload '" + this.name + "' nullable must be boolean", this.id);
-        } else if (n != null) {
-            this.nullable = (Boolean) n;
-        }
     }
 }

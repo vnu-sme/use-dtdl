@@ -25,11 +25,6 @@ public class ASTComponent extends ASTContent {
         if (this.schemaInterface == null) {
             Object raw = this.props.get("schema");
             if (raw instanceof String) this.schemaInterface = (String) raw;
-            else if (raw instanceof java.util.Map<?, ?> m) {
-                Object dtmi = m.get("dtmi");
-                if (dtmi instanceof String) this.schemaInterface = (String) dtmi;
-                else if (m.get("@id") instanceof String) this.schemaInterface = (String) m.get("@id");
-            }
         }
 
         if (this.schemaInterface == null || this.schemaInterface.isBlank()) {

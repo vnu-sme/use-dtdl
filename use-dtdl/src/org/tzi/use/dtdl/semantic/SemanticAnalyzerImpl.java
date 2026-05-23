@@ -43,7 +43,6 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
 
         // clear per-run AST state so context can be reused across loads
         ctx.interfaces.clear();
-        ctx.schemas.clear();
         ctx.errors.clear();
         ctx.clearWarnings();
 
@@ -69,34 +68,10 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
             }
         }
 
-
-
-        // Phase 1b: register top-level schemas declared by the AST interfaces
-        for (ASTInterface iface : astInterfaces) {
-            try {
-                for (Map.Entry<String, ASTSchema> e : iface.schemaIndex.entrySet()) {
-                    String sid = e.getKey();
-                    ASTSchema astSchema = e.getValue();
-                    if (sid == null || astSchema == null) continue;
-
-                    ctx.registerSchema(sid, astSchema);
-                }
-            } catch (Exception ex) {
-                Object maybeId = iface.props.get("@id");
-                String loc = maybeId instanceof String ? (String) maybeId : null;
-                ctx.report(
-                        "Schema registration error for interface: " + maybeId + " - " + ex.getMessage(),
-                        loc
-                );
-            }
-        }
-
         // Detect cycles among AST interfaces in the current analyze pass:
         // simple DFS using ctx.interfaces map (only local AST graph)
         // We only check cycles that involve only AST interfaces (registered models can't form AST cycles).
         validateInheritanceGraph();
-        // limit depth of extends chain to avoid pathological deep inheritance
-        validateInheritanceDepth();
 
         // Phase 2: semantic validate each interface (each AST class validates its own children)
         for (ASTInterface iface : astInterfaces) {
@@ -129,8 +104,7 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
 
     private void validateBiDirectionalRelationship() {
         Map<String, ASTRelationship> directedRelationships = new HashMap<>();
-        Set<ASTRelationship> relationshipsToRemove = Collections.newSetFromMap(new IdentityHashMap<>());
-        Set<String> processedPairs = new HashSet<>();
+        Set<ASTRelationship> relationshipsToRemove = new HashSet<>();
 
         for (Map.Entry<String, ASTInterface> e : ctx.interfaces.entrySet()) {
             String sourceId = e.getKey();
@@ -158,10 +132,6 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
                         ? sourceId + "<->" + targetId
                         : targetId + "<->" + sourceId;
 
-                // already handled this pair
-                if (processedPairs.contains(pairKey)) {
-                    continue;
-                }
 
                 ASTRelationship reverseRel = directedRelationships.get(reverseKey);
 
@@ -171,7 +141,6 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
                     continue;
                 }
 
-                processedPairs.add(pairKey);
                 ctx.reportWarning("Bidirectional relationship detected: " + pairKey);
 
                 ASTBidirectionalRelationship merged = new ASTBidirectionalRelationship(rel.id, rel.name, rel.getComment(), rel.description, rel.getDisplayName(),
@@ -271,54 +240,5 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
         stack.pop();
         visiting.remove(node);
         visited.add(node);
-    }
-
-    private void validateInheritanceDepth() {
-        Map<String, Integer> cache = new HashMap<>();
-
-        for (String id : ctx.interfaces.keySet()) {
-            int depth = computeDepth(id, cache, new HashSet<>());
-            if (depth >= Integer.MAX_VALUE / 8) {
-                ctx.report("Inheritance cycle detected involving interface: " + id, id);
-            } else if (depth > MAX_INHERITANCE_DEPTH) {
-                ctx.report("Inheritance depth " + depth + " exceeds maximum allowed (" + MAX_INHERITANCE_DEPTH + ")", id);
-            }
-        }
-    }
-
-    private int computeDepth(String id, Map<String, Integer> cache, Set<String> visiting) {
-        if (cache.containsKey(id)) return cache.get(id);
-        if (visiting.contains(id)) {
-            // cycle detected — return a sentinel (very large) so caller flags as problematic
-            return Integer.MAX_VALUE / 4;
-        }
-
-        visiting.add(id);
-        ASTInterface iface = ctx.interfaces.get(id);
-        int max = 1;
-
-        if (iface != null) {
-            for (String p : iface.getExtendsList()) {
-                if (p == null) continue;
-                String parent = p.trim();
-                if (parent.isEmpty()) continue;
-                if (!ctx.interfaces.containsKey(parent)) {
-                    // parent is external (registered) -> we assume unknown depth contribution (count as +1)
-                    max = Math.max(max, 1 + 1); // treat external parent as depth 2
-                    continue;
-                }
-                int d = computeDepth(parent, cache, visiting);
-                if (d >= Integer.MAX_VALUE / 8) {
-                    // cycle detected lower in chain, propagate sentinel
-                    max = Integer.MAX_VALUE / 4;
-                } else {
-                    max = Math.max(max, 1 + d);
-                }
-            }
-        }
-
-        visiting.remove(id);
-        cache.put(id, max);
-        return max;
     }
 }

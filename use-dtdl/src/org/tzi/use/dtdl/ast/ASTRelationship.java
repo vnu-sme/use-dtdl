@@ -96,12 +96,6 @@ public class ASTRelationship extends ASTContent {
             ctx.report("Relationship '" + this.name + "' multiplicities exceed maximum allowed (" + MAX_MULT + ")", this.id);
         }
 
-        // writable must be boolean (if provided)
-        Object wr = this.props.get("writable");
-        if (wr != null && !(wr instanceof Boolean)) {
-            ctx.report("Relationship '" + this.name + "' writable must be boolean", this.id);
-        } else if (wr != null) this.writable = (Boolean) wr;
-
         // validate nested property definitions
         for (ASTProperty p : properties) {
             if (p != null) p.validate(analyzer);
