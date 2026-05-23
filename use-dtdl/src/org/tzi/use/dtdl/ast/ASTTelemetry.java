@@ -43,24 +43,6 @@ public class ASTTelemetry extends ASTContent {
             ctx.report("Telemetry missing name", this.id);
         }
 
-        Object raw = this.props.get("schema");
-        ASTSchema resolved = null;
-
-        if (raw instanceof String ref) {
-            resolved = ctx.resolveSchemaRefGlobal(ref);
-            if (resolved == null) {
-                if (!ctx.hasModelSchema(ref)) {
-                    ctx.report("Telemetry '" + this.name + "' unresolved schema: " + ref, this.id);
-                }
-            } else {
-                this.schema = resolved;
-            }
-        } else if (raw instanceof ASTSchema) {
-            this.schema = (ASTSchema) raw;
-        } else if (this.schema == null) {
-            ctx.report("Telemetry '" + this.name + "' missing schema", this.id);
-        }
-
         // telemetry should not use reserved names
         if (this.name != null && (this.name.equalsIgnoreCase("@id") || this.name.equalsIgnoreCase("@type"))) {
             ctx.report("Telemetry '" + this.name + "' uses reserved name", this.id);

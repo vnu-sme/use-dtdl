@@ -7,6 +7,7 @@ import org.tzi.use.dtdl.semantic.DTDLContext;
 import org.tzi.use.dtdl.semantic.SemanticAnalyzer;
 import org.tzi.use.dtdl.semantic.SemanticAnalyzerImpl;
 
+import java.sql.SQLOutput;
 import java.util.*;
 
 import static org.tzi.use.dtdl.ast.schema.SchemaFactory.primitiveSchemaFromName;
@@ -146,24 +147,14 @@ public class ASTInterface extends ASTNode {
                         schemaIndex.put((String) id, as);
                     }
                     this.addSchema(as);
+                    resolveSchema(as);
+
                 }
             }
         }
 
         // 2) Resolve the interface contents (properties, telemetries, commands, etc.)
         resolveInterface(this);
-
-        // 3) Resolve the collected/registered schemas (resolve nested fields/values)
-        for (ASTSchema s : new ArrayList<>(schemaIndex.values())) {
-            // ensure canonicalization and deep-resolve
-            resolveSchema(s);
-        }
-        // Also resolve any schemas added via addSchema that might not have been in schemaIndex
-        for (ASTSchema s : this.schemas) {
-            if (s != null && (s.props.get("@id") == null || !schemaIndex.containsValue(s))) {
-                resolveSchema(s);
-            }
-        }
     }
 
     // resolve either primitive name or DTMI reference registered in schemaIndex

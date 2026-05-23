@@ -50,37 +50,7 @@ public class ASTProperty extends ASTContent {
             ctx.report("Property missing name", this.id);
         }
 
-        // schema resolution: allow primitive, AST-local schema, or model-registered schema
-        Object raw = this.props.get("schema");
-        ASTSchema resolved = null;
-
-        if (raw instanceof String ref) {
-            resolved = ctx.resolveSchemaRefGlobal(ref);
-            if (resolved == null) {
-                // maybe resides in registered models
-                if (!ctx.hasModelSchema(ref)) {
-                    ctx.report("Property '" + this.name + "' has unresolved schema reference: " + ref, this.id);
-                }
-            } else {
-                this.schema = resolved;
-            }
-        } else if (raw instanceof ASTSchema) {
-            this.schema = (ASTSchema) raw;
-            // deeper schema validation delegated to schema resolver earlier
-        } else if (this.schema == null) {
-            // no schema found
-            ctx.report("Property '" + this.name + "' missing schema", this.id);
-        }
-
-        // writable must be boolean (if provided)
-        Object w = this.props.get("writable");
-        if (w != null && !(w instanceof Boolean)) {
-            ctx.report("Property '" + this.name + "' writable must be boolean", this.id);
-        } else if (w != null) {
-            this.writable = (Boolean) w;
-        }
-
-        // additional semantic rule: property name should not collide with reserved words
+        // property name should not collide with reserved words
         if (this.name != null) {
             String n = this.name.trim();
             if (n.equalsIgnoreCase("@id") || n.equalsIgnoreCase("@type")) {
