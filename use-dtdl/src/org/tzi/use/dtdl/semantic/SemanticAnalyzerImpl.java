@@ -14,7 +14,6 @@ import java.sql.SQLOutput;
 import java.util.*;
 
 public class SemanticAnalyzerImpl implements SemanticAnalyzer {
-    private static final int MAX_INHERITANCE_DEPTH = 10;
     private final DTDLModelRegistry registry;
     private final DTDLContext ctx;
 

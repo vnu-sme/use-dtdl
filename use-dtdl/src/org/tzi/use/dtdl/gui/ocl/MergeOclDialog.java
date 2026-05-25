@@ -1,5 +1,6 @@
 package org.tzi.use.dtdl.gui.ocl;
 
+import org.tzi.use.dtdl.actions.DTDLPluginState;
 import org.tzi.use.main.Session;
 import org.tzi.use.dtdl.integration.DTDLOCLIntegrator;
 import org.tzi.use.uml.mm.MMPrintVisitor;
@@ -68,14 +69,13 @@ public class MergeOclDialog extends JDialog {
                 );
 
                 pw.println(merged == null ? "[Preview] Failed to build merged spec." : merged);
-                pw.flush();
             } catch (Throwable t) {
                 pw.println("[Preview] Failed to export model: " + t.getMessage());
             }
 
             JTextArea preview = new JTextArea(sw.toString(), 30, 120);
             preview.setEditable(false);
-            preview.setCaretPosition(0);
+            preview.setCaretPosition(0); // pointer
             JScrollPane psp = new JScrollPane(preview, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
             JOptionPane.showMessageDialog(this, psp, "Preview merged specification", JOptionPane.PLAIN_MESSAGE);
         });
@@ -99,6 +99,8 @@ public class MergeOclDialog extends JDialog {
                 JScrollPane scroll = new JScrollPane(out, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
                 JOptionPane.showMessageDialog(this, scroll, "Success", JOptionPane.INFORMATION_MESSAGE);
                 dispose();
+
+                DTDLPluginState.operationService(session).removeRules();
             } else {
                 JTextArea out = new JTextArea(diag.isEmpty() ? "Compilation failed (no diagnostics available)." : diag, 20, 100);
                 out.setEditable(false);

@@ -69,8 +69,6 @@ public final class UseRuntimeService {
                     } else if ("value".equals(a.name())) {
                         entryValues.put("value", buildUseValue(a.type(), e.getValue()));
                     } else {
-                        // if entryType has other attributes, try to map by name (optional)
-                        Object rawVal = null;
                         // no raw source for other attributes -> leave undefined
                         entryValues.put(a.name(), UndefinedValue.instance);
                     }

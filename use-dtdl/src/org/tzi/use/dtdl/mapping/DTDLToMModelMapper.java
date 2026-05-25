@@ -762,14 +762,6 @@ public class DTDLToMModelMapper {
         return "String";
     }
 
-    private String schemaTypeLabel(Schema s) {
-        if (s == null) return "String";
-        if (s instanceof PrimitiveType) return ((PrimitiveType)s).getTypeName();
-        if (s instanceof Array) return "Sequence";
-        if (s instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object) return "Object";
-        return "String";
-    }
-
     private void createGeneralizations() throws UseApiException {
         for (Interface iface : dtdl.getInterfaces().values()) {
             MClass child = ifaceToClass.get(iface.getId());

@@ -10,8 +10,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * Registry that maintains a single canonical DTDLModel that contains all interfaces
  * registered so far. Also tracks which incoming DTDLModel contributed which interface IDs
  * so we can remove that contribution later.
- *
- * Thread-safe for the main operations.
  */
 public final class DTDLModelRegistry {
 
@@ -19,13 +17,10 @@ public final class DTDLModelRegistry {
     private final DTDLModel canonical = new DTDLModel();
 
     // interfaceId -> source model (the model object that contributed this interface)
-    private final ConcurrentHashMap<String, DTDLModel> interfaceToSource = new ConcurrentHashMap<>();
-
-    // track contributions: source model -> set of interface IDs it added
-    private final Map<DTDLModel, Set<String>> contributions = Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Map<String, DTDLModel> interfaceToSource = new LinkedHashMap<>();
 
     // persistent mapping DTMI -> class name in the Use model
-    private final ConcurrentHashMap<String, String> dtmiToClassName = new ConcurrentHashMap<>();
+    private final Map<String, String> dtmiToClassName = new LinkedHashMap<>();
 
     public static final class RegistrationResult {
         public final boolean success;
@@ -34,7 +29,7 @@ public final class DTDLModelRegistry {
 
         public RegistrationResult(boolean success, List<String> conflicts, boolean overwritten) {
             this.success = success;
-            this.conflicts = Collections.unmodifiableList(new ArrayList<>(conflicts));
+            this.conflicts = List.copyOf(conflicts);
             this.overwritten = overwritten;
         }
     }
@@ -71,26 +66,13 @@ public final class DTDLModelRegistry {
                 if (oldSource != null) {
                     Interface removed = canonical.getInterface(c);
                     if (removed != null) {
-                        // remove from canonical map (we don't know if other references exist elsewhere)
-                        // DTDLModel currently stores interfaces in a map; remove the key
-                        // We need a removal API: canonical.getInterfaces().remove(c)
-                        synchronized (canonical) {
-                            canonical.getInterfaces().remove(c);
-                        }
-                    }
-                    // update contribution record
-                    synchronized (contributions) {
-                        Set<String> set = contributions.get(oldSource);
-                        if (set != null) {
-                            set.remove(c);
-                            if (set.isEmpty()) contributions.remove(oldSource);
-                        }
+                        canonical.getInterfaces().remove(c);
                     }
                 }
             }
         }
 
-        // Now add all interfaces from incoming model into canonical and record contributions
+        // Now add all interfaces from incoming model into canonical
         Set<String> added = new HashSet<>();
         for (Map.Entry<String, Interface> e : model.getInterfaces().entrySet()) {
             String ifaceId = e.getKey();
@@ -98,53 +80,14 @@ public final class DTDLModelRegistry {
             if (ifaceId == null || iface == null) continue;
 
             // Put into canonical model (replace any existing entry)
-            synchronized (canonical) {
-                canonical.addInterface(iface);
-            }
+            canonical.addInterface(iface);
 
             // record source mapping
             interfaceToSource.put(ifaceId, model);
             added.add(ifaceId);
         }
 
-        // record contributions
-        synchronized (contributions) {
-            Set<String> prev = contributions.get(model);
-            if (prev == null) prev = Collections.synchronizedSet(new LinkedHashSet<>());
-            prev.addAll(added);
-            contributions.put(model, prev);
-        }
-
         return new RegistrationResult(true, conflicts, !conflicts.isEmpty());
-    }
-
-    /**
-     * Remove all interfaces contributed by the given source model.
-     * Returns true if any interfaces were removed.
-     */
-    public boolean unregisterModel(DTDLModel model) {
-        if (model == null) return false;
-        Set<String> contributed;
-        synchronized (contributions) {
-            contributed = contributions.remove(model);
-        }
-        if (contributed == null || contributed.isEmpty()) return false;
-
-        boolean removedAny = false;
-        for (String id : contributed) {
-            // remove mapping and canonical entry if it still points to this source
-            DTDLModel source = interfaceToSource.remove(id);
-            if (source != null && source == model) {
-                synchronized (canonical) {
-                    Interface removed = canonical.getInterface(id);
-                    if (removed != null) {
-                        canonical.getInterfaces().remove(id);
-                        removedAny = true;
-                    }
-                }
-            }
-        }
-        return removedAny;
     }
 
     /**
@@ -164,9 +107,7 @@ public final class DTDLModelRegistry {
     public Optional<Interface> getInterfaceFromModels(String ifaceId) {
         if (ifaceId == null) return Optional.empty();
         Interface i;
-        synchronized (canonical) {
-            i = canonical.getInterface(ifaceId);
-        }
+        i = canonical.getInterface(ifaceId);
         return Optional.ofNullable(i);
     }
 
@@ -175,21 +116,10 @@ public final class DTDLModelRegistry {
      */
     public boolean hasModelSchema(String schemaId) {
         if (schemaId == null) return false;
-        synchronized (canonical) {
-            for (Interface iface : canonical.getInterfaces().values()) {
-                if (iface.getSchemas().containsKey(schemaId)) return true;
-            }
+        for (Interface iface : canonical.getInterfaces().values()) {
+            if (iface.getSchemas().containsKey(schemaId)) return true;
         }
         return false;
-    }
-
-    /**
-     * Return the canonical model wrapped in a list for compatibility with existing callers.
-     */
-    public List<DTDLModel> listRegisteredModels() {
-        synchronized (canonical) {
-            return Collections.unmodifiableList(List.of(canonical));
-        }
     }
 
     /**

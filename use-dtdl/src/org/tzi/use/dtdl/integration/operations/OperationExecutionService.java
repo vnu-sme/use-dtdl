@@ -32,6 +32,10 @@ public final class OperationExecutionService {
         return new ArrayList<>(rules.values());
     }
 
+    public void removeRules() {
+        rules.clear();
+    }
+
     public List<OperationResult> history() {
         synchronized (history) {
             return new ArrayList<>(history);

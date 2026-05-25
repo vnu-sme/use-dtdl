@@ -15,10 +15,7 @@ import org.tzi.use.dtdl.telemetry.imports.TelemetryImportReader;
 import org.tzi.use.dtdl.telemetry.imports.TelemetryImportSpec;
 import org.tzi.use.main.Session;
 import java.io.File;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class DTDLPluginState {
@@ -34,21 +31,14 @@ public final class DTDLPluginState {
 
     private DTDLPluginState() {}
 
-    public static synchronized DTDLModelRegistry registry() {
+    public static DTDLModelRegistry registry() {
         if (registry == null) {
             registry = new DTDLModelRegistry();
         }
         return registry;
     }
 
-    public static synchronized DTDLContext context() {
-        if (ctx == null) {
-            ctx = new DTDLContext(registry());
-        }
-        return ctx;
-    }
-
-    public static synchronized TelemetryEngine startTelemetryRuntime(Session session) {
+    public static TelemetryEngine startTelemetryRuntime(Session session) {
         if (telemetryEngine == null) {
             telemetryEngine = new TelemetryEngine(session);
             telemetryEngine.start();
@@ -57,12 +47,12 @@ public final class DTDLPluginState {
         return telemetryEngine;
     }
 
-    public static synchronized TelemetryEngine telemetryEngine() {
+    public static TelemetryEngine telemetryEngine() {
         return telemetryEngine;
     }
 
 
-    public static synchronized void registerAdapter(TelemetryAdapter adapter, Session session) {
+    public static void registerAdapter(TelemetryAdapter adapter, Session session) {
         Objects.requireNonNull(adapter, "adapter");
         startTelemetryRuntime(session);
 
@@ -74,7 +64,7 @@ public final class DTDLPluginState {
         telemetryEngine.registerAdapter(adapter);
     }
 
-    public static synchronized void startAllRegisteredAdapters() {
+    public static void startAllRegisteredAdapters() {
         if (telemetryEngine == null) {
             throw new IllegalStateException("Telemetry runtime not started");
         }
@@ -103,7 +93,7 @@ public final class DTDLPluginState {
     }
 
     // IMPORT FLOW FOR TELEMETRY
-    public static synchronized int registerTelemetryImport(File file, Session session) {
+    public static int registerTelemetryImport(File file, Session session) {
         Objects.requireNonNull(file, "file");
         Objects.requireNonNull(session, "session");
 
@@ -159,8 +149,8 @@ public final class DTDLPluginState {
         return registered;
     }
 
-    public static synchronized Map<String, TelemetryAdapter> getRegisteredAdapters() {
-        return Collections.unmodifiableMap(new java.util.HashMap<>(adapters));
+    public static Map<String, TelemetryAdapter> getRegisteredAdapters() {
+        return new HashMap<>(adapters);
     }
 
     public static OperationCatalog operationCatalog() {
@@ -175,10 +165,6 @@ public final class DTDLPluginState {
             operationServiceSession = session;
         }
 
-        return operationService;
-    }
-
-    public static synchronized OperationExecutionService operationService() {
         return operationService;
     }
 }

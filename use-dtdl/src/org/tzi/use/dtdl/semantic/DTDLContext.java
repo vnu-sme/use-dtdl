@@ -54,10 +54,6 @@ public final class DTDLContext {
         interfaces.put(id, iface);
     }
 
-    public boolean unregisterModel(DTDLModel model) {
-        return registry.unregisterModel(model);
-    }
-
     public DTDLModel getModelForInterface(String ifaceId) {
         return registry.getModelForInterface(ifaceId).orElse(null);
     }
@@ -66,7 +62,4 @@ public final class DTDLContext {
         return registry.getInterfaceFromModels(ifaceId).orElse(null);
     }
 
-    public List<DTDLModel> listRegisteredModels() {
-        return registry.listRegisteredModels();
-    }
 }

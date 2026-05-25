@@ -65,6 +65,10 @@ inv AQILevelConsistency:
       self.airQualityLevelOfAirQualityObserved->forAll(l | l.level = AirQualityLevel_level_Enum::hazardous))
 
 
+context WeatherObserved
+inv hasWeatherType:
+    self.weatherType <> null
+
 context StreetlightControlCabinet
 inv StressForbidsManualMode:
   let impactedPoles : Set(Pole) =

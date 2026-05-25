@@ -131,26 +131,10 @@ public final class TelemetryProcessor {
                 } else if (b.fieldPaths != null) {
                     System.err.println("[PROCESSOR] Using fieldPaths binding for telemetry='" + b.telemetryName + "'");
                     try {
-                        Object parsedRaw = ev.rawValue;
-                        if (parsedRaw instanceof String) {
-                            String s = ((String) parsedRaw).trim();
-                            if (s.startsWith("{") || s.startsWith("[")) {
-                                parsedRaw = MAPPER.readValue(s, Object.class);
-                            }
-                        }
+                        Map<String, Object> assembled = new LinkedHashMap<>();
+                        String baseJson = String.valueOf(ev.rawValue);
 
-                        System.err.println("[PROCESSOR] Parsed raw value type = " + (parsedRaw == null ? "null" : parsedRaw.getClass().getName()));
-
-                        if (parsedRaw instanceof LinkedHashMap<?,?>)  {
-                            Map<String, Object> assembled = new LinkedHashMap<>();
-                            String baseJson;
-                            try {
-                                baseJson = (parsedRaw instanceof String) ? (String) parsedRaw : MAPPER.writeValueAsString(parsedRaw);
-                            } catch (Exception ex) {
-                                baseJson = String.valueOf(parsedRaw);
-                            }
-
-                            for (Map.Entry<String, String> en : b.fieldPaths.entrySet()) {
+                        for (Map.Entry<String, String> en : b.fieldPaths.entrySet()) {
                                 String fname = en.getKey();
                                 String path = en.getValue();
                                 if (path == null || path.isBlank()) {
@@ -171,7 +155,6 @@ public final class TelemetryProcessor {
                                 // wrap the object under telemetry name so TelemetryApplier will write the full DataType attribute
                                 normalized = wrapIfNeeded(r.value, schema, telemetryNameForLookup, b);
                             }
-                        }
                     } catch (Exception ex) {
                         System.err.println("[PROCESSOR] binding fieldPaths extraction failed: " + ex.getMessage());
                         ex.printStackTrace(System.err);

@@ -4,7 +4,6 @@ import org.tzi.use.dtdl.DTDLModel.ContentElement;
 import org.tzi.use.dtdl.DTDLModel.Schema.Array.Array;
 import org.tzi.use.dtdl.DTDLModel.Telemetry.Telemetry;
 import org.tzi.use.dtdl.actions.DTDLPluginState;
-import org.tzi.use.dtdl.gui.instance.SchemaInputFactory;
 import org.tzi.use.dtdl.telemetry.BindingRegistry;
 import org.tzi.use.dtdl.telemetry.HttpPollingAdapter;
 import org.tzi.use.dtdl.telemetry.TelemetryAdapter;
@@ -14,7 +13,6 @@ import org.tzi.use.dtdl.DTDLModel.Schema.*;
 import org.tzi.use.dtdl.DTDLModel.Schema.Object.Field;
 import org.tzi.use.dtdl.DTDLModel.Schema.Enum.EnumValue;
 import org.tzi.use.dtdl.semantic.DTDLModelRegistry;
-import org.tzi.use.dtdl.use.UseRuntimeService;
 import org.tzi.use.dtdl.util.Utils;
 import org.tzi.use.main.Session;
 import org.tzi.use.uml.sys.MObject;
@@ -40,7 +38,6 @@ public class ApiRegistrationDialog extends JDialog {
     private final JList<String> adapterList = new JList<>(listModel);
 
     private final Session session;
-    private final UseRuntimeService useService;
 
     private final JTextField urlField = new JTextField();
     private final JComboBox<String> methodComboBox = new JComboBox<>(new String[]{"GET", "POST"});
@@ -59,8 +56,6 @@ public class ApiRegistrationDialog extends JDialog {
     public ApiRegistrationDialog(Window owner, Session session) {
         super(owner, "Register Device APIs (instance-first)", ModalityType.APPLICATION_MODAL);
         this.session = Objects.requireNonNull(session, "session required");
-        this.useService = new UseRuntimeService(session);
-
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(8,8));
         JPanel content = new JPanel(new BorderLayout(8,8));
@@ -264,7 +259,6 @@ public class ApiRegistrationDialog extends JDialog {
             if (teleName == null) continue;
 
             Schema sch = telemetry.getSchema();
-            sch = SchemaInputFactory.resolveNamedSchema(sch, iface);
 
             // section header
             gbc.gridx = 0;
@@ -312,7 +306,7 @@ public class ApiRegistrationDialog extends JDialog {
             // 3) Array schema -> if element is object, allow per-field inputs for element schema;
             //    otherwise treat as single value-path (extract entire array).
             if (sch instanceof Array arrSch) {
-                Schema elem = SchemaInputFactory.resolveNamedSchema(arrSch.getElementSchema(), iface);
+                Schema elem = arrSch.getElementSchema();
 
                 if (elem instanceof org.tzi.use.dtdl.DTDLModel.Schema.Object.Object elemObj) {
                     Map<String, JTextField> fieldMap = new LinkedHashMap<>();
@@ -476,7 +470,7 @@ public class ApiRegistrationDialog extends JDialog {
     }
 
     private void onImport() {
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new JFileChooser("D:\\workspaces\\use\\use-dtdl\\src\\resources\\example");
         chooser.setDialogTitle("Import telemetry registration JSON");
         int result = chooser.showOpenDialog(this);
         if (result != JFileChooser.APPROVE_OPTION) {

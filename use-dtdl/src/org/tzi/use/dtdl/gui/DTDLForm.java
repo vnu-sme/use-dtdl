@@ -40,7 +40,6 @@ public class DTDLForm extends JDialog {
     private JTextField filePathField;
     private PrintWriter logWriter;
     private final SemanticAnalyzerImpl analyzer;
-    private DTDLModelRegistry sharedRegistry;
 
     private JFileChooser chooser;
     private File[] selectedFiles;
@@ -281,7 +280,7 @@ public class DTDLForm extends JDialog {
                 modelName = "unnamed";
             }
 
-            // create new empty model via UseModelApi (uses ModelFactory internally)
+            // create new empty model via UseModelApi
             UseModelApi api = new UseModelApi(modelName);
             MModel model = api.getModel();
 
@@ -301,7 +300,6 @@ public class DTDLForm extends JDialog {
             }
 
         } catch (Exception ex) {
-            // never crash import because of bootstrap
             ex.printStackTrace(logWriter);
             if (logWriter != null) {
                 logWriter.println("[DTDLForm] Warning: failed to bootstrap system/model: " + ex.getMessage());

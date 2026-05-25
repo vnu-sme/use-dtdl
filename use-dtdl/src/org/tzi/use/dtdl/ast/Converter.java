@@ -31,7 +31,7 @@ import org.tzi.use.dtdl.semantic.DTDLContext;
 public final class Converter {
     private final DTDLContext ctx;
     private final DTDLModel model = new DTDLModel();
-    private final Map<String, Interface> ifaceIndex = new HashMap<>();
+//    private final Map<String, Interface> ifaceIndex = new HashMap<>();
 
     public Converter(DTDLContext ctx) {
         this.ctx = ctx;
@@ -51,7 +51,7 @@ public final class Converter {
             di.setDescription(a.description);
 
             model.addInterface(di);
-            ifaceIndex.put(a.id, di);
+//            ifaceIndex.put(a.id, di);
         }
 
         // Phase 2: per-interface schemas
